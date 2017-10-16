@@ -36,6 +36,7 @@
 #include "memory.h"
 #include "fiber.h"
 #include "tuple.h"
+#include "tuple_hint.h"
 #include <third_party/qsort_arg.h>
 #include <small/mempool.h>
 
@@ -47,6 +48,11 @@ class MemtxTreeKeyData {
 	const char *key;
 	/** Number of msgpacked search fields. */
 	uint32_t part_count;
+	/**
+	 * Comparison hint. Calculated automatically on method
+	 * MemtxTreeKeyData::set.
+	 */
+	uint64_t hint;
 public:
 	/**
 	 * Return "payload" data that this object stores:
@@ -60,15 +66,25 @@ public:
 	}
 
 	/**
+	 * Return comparasion hint is calculated before "payload"
+	 * store on MemtxTreeKeyData::set call.
+	 */
+	uint64_t
+	get_hint(void) const
+	{
+		return this->hint;
+	}
+
+	/**
 	 * Perform this MemtxTreeKeyData object
 	 * initialization.
 	 */
 	void
 	set(const char *key, uint32_t part_count, struct key_def *key_def)
 	{
-		(void)key_def;
 		this->key = key;
 		this->part_count = part_count;
+		this->hint = part_count > 0 ? key_hint(key, key_def) : 0;
 	}
 };
 
@@ -78,6 +94,11 @@ public:
 class MemtxTreeData {
 	/** Data tuple pointer. */
 	struct tuple *tuple;
+	/**
+	 * Comparison hint. Calculated automatically on method
+	 * MemtxTreeData::set.
+	 */
+	uint64_t hint;
 public:
 	/**
 	 * Return "payload" data that this object stores:
@@ -95,6 +116,7 @@ public:
 	{
 		(void)key_def;
 		this->tuple = tuple;
+		this->hint = tuple_hint(tuple, key_def);
 	}
 
 	/** Clear this MemtxTreeData object. */
@@ -124,7 +146,13 @@ public:
 	int
 	compare(const MemtxTreeData *elem, struct key_def *key_def) const
 	{
-		return tuple_compare(this->tuple, elem->tuple, key_def);
+		if (likely(this->hint != elem->hint &&
+			   this->hint != INVALID_HINT &&
+			   elem->hint != INVALID_HINT)) {
+			return this->hint < elem->hint ? -1 : 1;
+		} else {
+			return tuple_compare(this->tuple, elem->tuple, key_def);
+		}
 	}
 
 	/**
@@ -137,8 +165,15 @@ public:
 	{
 		uint32_t part_count;
 		const char *key_data = key->get(&part_count);
-		return tuple_compare_with_key(this->tuple, key_data, part_count,
-					      key_def);
+		uint64_t key_hint = key->get_hint();
+		if (likely(this->hint != key_hint &&
+			   this->hint != INVALID_HINT &&
+			   key_hint != INVALID_HINT)) {
+			return this->hint < key_hint ? -1 : 1;
+		} else {
+			return tuple_compare_with_key(this->tuple, key_data,
+						      part_count, key_def);
+		}
 	}
 };
 
