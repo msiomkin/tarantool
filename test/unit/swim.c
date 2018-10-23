@@ -56,7 +56,7 @@ swim_test_one_link(void)
 	 * learns about another explicitly. Another should add the
 	 * former into his table of members.
 	 */
-	struct swim_cluster *cluster = swim_cluster_new(2);
+	struct swim_cluster *cluster = swim_cluster_new(2, -1);
 	fail_if(swim_cluster_add_link(cluster, 0, 1) != 0);
 	is(swim_cluster_wait_fullmesh(cluster, 0.9), -1,
 	   "no rounds - no fullmesh");
@@ -85,7 +85,7 @@ swim_test_sequence(void)
 	 * in O(N) time. Time is not fixed because of randomness,
 	 * so here just in case 2N is used - it should be enough.
 	 */
-	struct swim_cluster *cluster = swim_cluster_new(5);
+	struct swim_cluster *cluster = swim_cluster_new(5, -1);
 	for (int i = 0; i < 4; ++i)
 		swim_cluster_add_link(cluster, i, i + 1);
 	is(swim_cluster_wait_fullmesh(cluster, 10), 0, "sequence");
@@ -99,17 +99,17 @@ swim_test_uuid_update(void)
 {
 	swim_start_test(4);
 
-	struct swim_cluster *cluster = swim_cluster_new(2);
+	struct swim_cluster *cluster = swim_cluster_new(2, -1);
 	swim_cluster_add_link(cluster, 0, 1);
 	fail_if(swim_cluster_wait_fullmesh(cluster, 1) != 0);
 	struct swim *s = swim_cluster_node(cluster, 0);
 	struct tt_uuid new_uuid = uuid_nil;
 	new_uuid.time_low = 1000;
-	is(swim_cfg(s, NULL, -1, &new_uuid), 0, "UUID update");
+	is(swim_cfg(s, NULL, -1, -1, -1, &new_uuid), 0, "UUID update");
 	is(swim_cluster_wait_fullmesh(cluster, 1), 0,
 	   "old UUID is returned back as a 'ghost' member");
 	new_uuid.time_low = 2;
-	is(swim_cfg(s, NULL, -1, &new_uuid), -1,
+	is(swim_cfg(s, NULL, -1, -1, -1, &new_uuid), -1,
 	   "can not update to an existing UUID - swim_cfg fails");
 	ok(swim_error_check_match("exists"), "diag says 'exists'");
 	swim_cluster_delete(cluster);
@@ -124,16 +124,16 @@ swim_test_cfg(void)
 
 	struct swim *s = swim_new();
 	assert(s != NULL);
-	is(swim_cfg(s, NULL, -1, NULL), -1, "first cfg failed - no URI");
+	is(swim_cfg(s, NULL, -1, -1, -1, NULL), -1, "first cfg failed - no URI");
 	ok(swim_error_check_match("mandatory"), "diag says 'mandatory'");
 	const char *uri = "127.0.0.1:1";
-	is(swim_cfg(s, uri, -1, NULL), -1, "first cfg failed - no UUID");
+	is(swim_cfg(s, uri, -1, -1, -1, NULL), -1, "first cfg failed - no UUID");
 	ok(swim_error_check_match("mandatory"), "diag says 'mandatory'");
 	struct tt_uuid uuid = uuid_nil;
 	uuid.time_low = 1;
-	is(swim_cfg(s, uri, -1, &uuid), 0, "configured first time");
-	is(swim_cfg(s, NULL, -1, NULL), 0, "second time can omit URI, UUID");
-	is(swim_cfg(s, NULL, 2, NULL), 0, "hearbeat is dynamic");
+	is(swim_cfg(s, uri, -1, -1, -1, &uuid), 0, "configured first time");
+	is(swim_cfg(s, NULL, -1, -1, -1, NULL), 0, "second time can omit URI, UUID");
+	is(swim_cfg(s, NULL, 2, 2, -1, NULL), 0, "hearbeat is dynamic");
 
 	struct swim *s2 = swim_new();
 	assert(s2 != NULL);
@@ -142,14 +142,16 @@ swim_test_cfg(void)
 	const char *bad_uri3 = "unix/:/home/gerold103/any/dir";
 	struct tt_uuid uuid2 = uuid_nil;
 	uuid2.time_low = 2;
-	is(swim_cfg(s2, bad_uri1, -1, &uuid2), -1, "can not use invalid URI");
+	is(swim_cfg(s2, bad_uri1, -1, -1, -1, &uuid2), -1,
+	   "can not use invalid URI");
 	ok(swim_error_check_match("invalid uri"), "diag says 'invalid uri'");
-	is(swim_cfg(s2, bad_uri2, -1, &uuid2), -1, "can not use domain names");
+	is(swim_cfg(s2, bad_uri2, -1, -1, -1, &uuid2), -1,
+	   "can not use domain names");
 	ok(swim_error_check_match("invalid uri"), "diag says 'invalid uri'");
-	is(swim_cfg(s2, bad_uri3, -1, &uuid2), -1,
+	is(swim_cfg(s2, bad_uri3, -1, -1, -1, &uuid2), -1,
 		    "UNIX sockets are not supported");
 	ok(swim_error_check_match("only IP"), "diag says 'only IP'");
-	is(swim_cfg(s2, uri, -1, &uuid2), -1,
+	is(swim_cfg(s2, uri, -1, -1, -1, &uuid2), -1,
 		    "can not bind to an occupied port");
 	ok(swim_error_check_match("bind"), "diag says 'bind'");
 	swim_delete(s2);
@@ -163,7 +165,7 @@ swim_test_add_remove(void)
 {
 	swim_start_test(13);
 
-	struct swim_cluster *cluster = swim_cluster_new(2);
+	struct swim_cluster *cluster = swim_cluster_new(2, -1);
 	swim_cluster_add_link(cluster, 0, 1);
 	fail_if(swim_cluster_wait_fullmesh(cluster, 1) != 0);
 	struct swim *s1 = swim_cluster_node(cluster, 0);
@@ -223,10 +225,74 @@ swim_test_add_remove(void)
 	swim_finish_test();
 }
 
+static void
+swim_test_basic_failure_detection(void)
+{
+	swim_start_test(7);
+	struct swim_cluster *cluster = swim_cluster_new(2, 0.5);
+
+	swim_cluster_add_link(cluster, 0, 1);
+	is(swim_cluster_member_status(cluster, 0, 1), MEMBER_ALIVE,
+	   "node is added as alive");
+	swim_cluster_block_io(cluster, 1);
+	is(swim_cluster_wait_member_status(cluster, 0, 1, MEMBER_DEAD, 2.4), -1,
+	   "member still is not dead after 2 noacks");
+	is(swim_cluster_wait_member_status(cluster, 0, 1, MEMBER_DEAD, 0.1), 0,
+	   "but it is dead after one more");
+
+	is(swim_cluster_wait_member_status(cluster, 0, 1,
+					   swim_member_status_MAX, 0.9), -1,
+	   "after 1 more unack the member still is not deleted");
+	is(swim_cluster_wait_member_status(cluster, 0, 1,
+					   swim_member_status_MAX, 0.1), 0,
+	   "but it is dropped after 1 more");
+
+	/*
+	 * After IO unblock pending messages will be processed all
+	 * at once. S2 will learn about S1. After one more round
+	 * step it should be fullmesh.
+	 */
+	swim_cluster_unblock_io(cluster, 1);
+	is(swim_cluster_wait_fullmesh(cluster, 1), 0, "fullmesh is restored");
+
+	/* A member can be removed during an ACK wait. */
+	swim_cluster_block_io(cluster, 1);
+	/* Next round after 1 sec + let ping hang for 0.25 sec. */
+	swim_run_for(1.25);
+	struct swim *s1 = swim_cluster_node(cluster, 0);
+	struct swim *s2 = swim_cluster_node(cluster, 1);
+	const struct swim_member *s2_self = swim_self(s2);
+	swim_remove_member(s1, swim_member_uuid(s2_self));
+	swim_cluster_unblock_io(cluster, 1);
+	swim_run_for(0.1);
+	is(swim_cluster_member_status(cluster, 0, 1), MEMBER_ALIVE,
+	   "a member is added back on an ACK");
+
+	swim_cluster_delete(cluster);
+	swim_finish_test();
+}
+
+static void
+swim_test_probe(void)
+{
+	swim_start_test(2);
+	struct swim_cluster *cluster = swim_cluster_new(2, -1);
+
+	struct swim *s1 = swim_cluster_node(cluster, 0);
+	struct swim *s2 = swim_cluster_node(cluster, 1);
+	const char *s2_uri = swim_member_uri(swim_self(s2));
+	is(swim_probe_member(s1, s2_uri), 0, "send probe");
+	is(swim_cluster_wait_fullmesh(cluster, 0.1), 0,
+	   "receive ACK on probe and get fullmesh")
+
+	swim_cluster_delete(cluster);
+	swim_finish_test();
+}
+
 static int
 main_f(va_list ap)
 {
-	swim_start_test(5);
+	swim_start_test(7);
 
 	(void) ap;
 	swim_test_ev_init();
@@ -237,6 +303,8 @@ main_f(va_list ap)
 	swim_test_uuid_update();
 	swim_test_cfg();
 	swim_test_add_remove();
+	swim_test_basic_failure_detection();
+	swim_test_probe();
 
 	swim_test_transport_free();
 	swim_test_ev_free();

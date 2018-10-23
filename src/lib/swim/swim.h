@@ -31,12 +31,17 @@
  * SUCH DAMAGE.
  */
 #include <stdbool.h>
+#include <limits.h>
 #define SWIM_PUBLIC_API
 #include "swim_proto.h"
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
+
+enum {
+	SWIM_NO_ACKS_IGNORE = INT_MAX,
+};
 
 struct info_handler;
 struct swim;
@@ -65,6 +70,14 @@ swim_is_configured(const struct swim *swim);
  *        @heartbeat_rate seconds. It is rather the protocol
  *        speed. Protocol period depends on member count and
  *        @heartbeat_rate.
+ * @param ack_timeout Time in seconds after which a ping is
+ *        considered to be unacknowledged.
+ * @param no_acks_to_gc How many pings to a dead member should be
+ *        unacknowledged to delete it from the member table. Big
+ *        or even almost infinite (SWIM_NO_ACKS_IGNORE) values
+ *        could be useful, if SWIM is used mainly for monitoring
+ *        of existing nodes with manual removal of dead ones, and
+ *        probably only initial discovery.
  * @param uuid UUID of this instance. Must be unique over the
  *        cluster.
  *
@@ -73,7 +86,7 @@ swim_is_configured(const struct swim *swim);
  */
 int
 swim_cfg(struct swim *swim, const char *uri, double heartbeat_rate,
-	 const struct tt_uuid *uuid);
+	 double ack_timeout, int no_acks_to_gc, const struct tt_uuid *uuid);
 
 /**
  * Stop listening and broadcasting messages, cleanup all internal
@@ -97,6 +110,13 @@ swim_add_member(struct swim *swim, const char *uri, const struct tt_uuid *uuid);
 /** Silently remove a member from member table. */
 int
 swim_remove_member(struct swim *swim, const struct tt_uuid *uuid);
+
+/**
+ * Send a ping to this address. If an ACK is received, the member
+ * will be added.
+ */
+int
+swim_probe_member(struct swim *swim, const char *uri);
 
 /** Dump member statuses into @a info. */
 void

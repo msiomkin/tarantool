@@ -1,5 +1,5 @@
 	*** main_f ***
-1..5
+1..7
 	*** swim_test_one_link ***
     1..6
     ok 1 - no rounds - no fullmesh
@@ -59,4 +59,21 @@ ok 4 - subtests
     ok 13 - back in fullmesh after a member removal in the middle of a step
 ok 5 - subtests
 	*** swim_test_add_remove: done ***
+	*** swim_test_basic_failure_detection ***
+    1..7
+    ok 1 - node is added as alive
+    ok 2 - member still is not dead after 2 noacks
+    ok 3 - but it is dead after one more
+    ok 4 - after 1 more unack the member still is not deleted
+    ok 5 - but it is dropped after 1 more
+    ok 6 - fullmesh is restored
+    ok 7 - a member is added back on an ACK
+ok 6 - subtests
+	*** swim_test_basic_failure_detection: done ***
+	*** swim_test_probe ***
+    1..2
+    ok 1 - send probe
+    ok 2 - receive ACK on probe and get fullmesh
+ok 7 - subtests
+	*** swim_test_probe: done ***
 	*** main_f: done ***

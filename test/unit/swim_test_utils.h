@@ -42,7 +42,7 @@ struct swim_cluster;
  * numbers equal to their port and to last part of UUID.
  */
 struct swim_cluster *
-swim_cluster_new(int size);
+swim_cluster_new(int size, double ack_timeout);
 
 /** Delete all the SWIM instances, and the cluster itself. */
 void
@@ -85,6 +85,16 @@ swim_cluster_is_fullmesh(struct swim_cluster *cluster);
 /** Wait for fullmesh at most @a timeout fake seconds. */
 int
 swim_cluster_wait_fullmesh(struct swim_cluster *cluster, double timeout);
+
+/**
+ * Wait until a member with id @a member_id is seen with @a status
+ * in the membership table of a member with id @a node_id. At most
+ * @a timeout seconds.
+ */
+int
+swim_cluster_wait_member_status(struct swim_cluster *cluster, int node_id,
+				int member_id, enum swim_member_status status,
+				double timeout);
 
 /** Process SWIM events for @a duration fake seconds. */
 void

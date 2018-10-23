@@ -46,7 +46,7 @@ struct swim_cluster {
 };
 
 struct swim_cluster *
-swim_cluster_new(int size)
+swim_cluster_new(int size, double ack_timeout)
 {
 	struct swim_cluster *res = (struct swim_cluster *) malloc(sizeof(*res));
 	assert(res != NULL);
@@ -62,7 +62,8 @@ swim_cluster_new(int size)
 		assert(res->node[i] != NULL);
 		sprintf(uri, "127.0.0.1:%d", i + 1);
 		uuid.time_low = i + 1;
-		int rc = swim_cfg(res->node[i], uri, -1, &uuid);
+		int rc = swim_cfg(res->node[i], uri, -1, ack_timeout, -1,
+				  &uuid);
 		assert(rc == 0);
 		(void) rc;
 	}
@@ -176,6 +177,17 @@ void
 swim_run_for(double duration)
 {
 	swim_wait_timeout(duration, false);
+}
+
+int
+swim_cluster_wait_member_status(struct swim_cluster *cluster, int node_id,
+				int member_id, enum swim_member_status status,
+				double timeout)
+{
+	return swim_wait_timeout(timeout,
+		swim_cluster_member_status(cluster, node_id,
+					   member_id) == status
+	);
 }
 
 bool
