@@ -750,7 +750,8 @@ sql_get_description(struct sql_stmt *stmt, struct obuf *out,
 		 * column_name simply returns them.
 		 */
 		assert(name != NULL);
-		assert(type != NULL);
+		if (type == NULL)
+			type = "UNKNOWN";
 		size += mp_sizeof_str(strlen(name));
 		size += mp_sizeof_str(strlen(type));
 		char *pos = (char *) obuf_alloc(out, size);
@@ -870,6 +871,8 @@ lua_sql_get_description(struct sql_stmt *stmt, struct lua_State *L,
 		 * column_name simply returns them.
 		 */
 		assert(name != NULL);
+		if (type == NULL)
+			type = "UNKNOWN";
 		assert(type != NULL);
 		lua_pushstring(L, name);
 		lua_setfield(L, -2, "name");
@@ -934,7 +937,7 @@ port_sql_dump_lua(struct port *port, struct lua_State *L)
  */
 static inline int
 sql_execute(sql *db, struct sql_stmt *stmt, struct port *port,
-	    struct region *region)
+	    struct region *region, int error_id)
 {
 	int rc, column_count = sql_column_count(stmt);
 	if (column_count > 0) {
@@ -951,7 +954,7 @@ sql_execute(sql *db, struct sql_stmt *stmt, struct port *port,
 		assert(rc != SQL_ROW && rc != SQL_OK);
 	}
 	if (rc != SQL_DONE) {
-		diag_set(ClientError, ER_SQL_EXECUTE, sql_errmsg(db));
+		diag_set(ClientError, error_id, sql_errmsg(db));
 		return -1;
 	}
 	return 0;
@@ -960,18 +963,18 @@ sql_execute(sql *db, struct sql_stmt *stmt, struct port *port,
 int
 sql_prepare_and_execute(const char *sql, int len, const struct sql_bind *bind,
 			uint32_t bind_count, struct port *port,
-			struct region *region)
+			struct region *region, int error_id)
 {
 	struct sql_stmt *stmt;
 	struct sql *db = sql_get();
 	if (sql_prepare_v2(db, sql, len, &stmt, NULL) != SQL_OK) {
-		diag_set(ClientError, ER_SQL_EXECUTE, sql_errmsg(db));
+		diag_set(ClientError, error_id, sql_errmsg(db));
 		return -1;
 	}
 	assert(stmt != NULL);
 	port_sql_create(port, stmt);
 	if (sql_bind(stmt, bind, bind_count) == 0 &&
-	    sql_execute(db, stmt, port, region) == 0)
+	    sql_execute(db, stmt, port, region, error_id) == 0)
 		return 0;
 	port_destroy(port);
 	return -1;
