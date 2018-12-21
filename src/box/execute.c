@@ -43,6 +43,7 @@
 #include "port.h"
 #include "tuple.h"
 #include "sql/vdbe.h"
+#include "lua/utils.h"
 
 const char *sql_type_strs[] = {
 	NULL,
@@ -145,6 +146,16 @@ static_assert(sizeof(struct port_sql) <= sizeof(struct port),
 static int
 port_sql_dump_msgpack(struct port *port, struct obuf *out);
 
+/**
+ * Dump data from port to Lua stack. Data in port contains tuples,
+ * metadata, or information obtained from an executed SQL query.
+ *
+ * @param port Port that contains SQL response.
+ * @param L Lua stack.
+ */
+static void
+port_sql_dump_lua(struct port *port, struct lua_State *L);
+
 static void
 port_sql_destroy(struct port *base)
 {
@@ -155,7 +166,7 @@ port_sql_destroy(struct port *base)
 static const struct port_vtab port_sql_vtab = {
 	/* .dump_msgpack = */ port_sql_dump_msgpack,
 	/* .dump_msgpack_16 = */ NULL,
-	/* .dump_lua = */ NULL,
+	/* .dump_lua = */ port_sql_dump_lua,
 	/* .dump_plain = */ NULL,
 	/* .destroy = */ port_sql_destroy,
 };
@@ -668,6 +679,76 @@ port_sql_dump_msgpack(struct port *port, struct obuf *out)
 		}
 	}
 	return 0;
+}
+
+/**
+ * Serialize a description of the prepared statement.
+ *
+ * @param stmt Prepared statement.
+ * @param L Lua stack.
+ * @param column_count Statement's column count.
+ */
+static inline void
+lua_sql_get_description(struct sql_stmt *stmt, struct lua_State *L,
+			int column_count)
+{
+	assert(column_count > 0);
+	lua_createtable(L, column_count, 0);
+	for (int i = 0; i < column_count; ++i) {
+		lua_createtable(L, 0, 2);
+		const char *name = sql_column_name(stmt, i);
+		const char *type = sql_column_datatype(stmt, i);
+		/*
+		 * Can not fail, since all column names are
+		 * preallocated during prepare phase and the
+		 * column_name simply returns them.
+		 */
+		assert(name != NULL);
+		assert(type != NULL);
+		lua_pushstring(L, name);
+		lua_setfield(L, -2, "name");
+		lua_pushstring(L, type);
+		lua_setfield(L, -2, "type");
+		lua_rawseti(L, -2, i + 1);
+	}
+}
+
+static void
+port_sql_dump_lua(struct port *port, struct lua_State *L)
+{
+	assert(port->vtab == &port_sql_vtab);
+	struct sql *db = sql_get();
+	struct sql_stmt *stmt = ((struct port_sql *)port)->stmt;
+	int column_count = sql_column_count(stmt);
+	if (column_count > 0) {
+		lua_createtable(L, 0, 2);
+		lua_sql_get_description(stmt, L, column_count);
+		lua_setfield(L, -2, "metadata");
+		port_tuple_vtab.dump_lua(port, L);
+		lua_setfield(L, -2, "rows");
+	} else {
+		assert(((struct port_tuple *)port)->size == 0);
+		struct stailq *autoinc_id_list =
+			vdbe_autoinc_id_list((struct Vdbe *)stmt);
+		lua_createtable(L, 0, stailq_empty(autoinc_id_list) ? 1 : 2);
+
+		luaL_pushuint64(L, db->nChange);
+		lua_setfield(L, -2, "rowcount");
+
+		if (!stailq_empty(autoinc_id_list)) {
+			lua_newtable(L);
+			int i = 1;
+			struct autoinc_id_entry *id_entry;
+			stailq_foreach_entry(id_entry, autoinc_id_list, link) {
+				if (id_entry->id >= 0)
+					luaL_pushuint64(L, id_entry->id);
+				else
+					luaL_pushint64(L, id_entry->id);
+				lua_rawseti(L, -2, i++);
+			}
+			lua_setfield(L, -2, "autoincrement_ids");
+		}
+	}
 }
 
 /**
