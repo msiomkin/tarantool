@@ -449,7 +449,7 @@ sqlite3RunParser(Parse * pParse, const char *zSql, char **pzErrMsg)
 		sqlite3OomFault(db);
 		return SQLITE_NOMEM_BKPT;
 	}
-	assert(pParse->pNewTable == 0);
+	assert(pParse->create_table_def.new_table == NULL);
 	assert(pParse->parsed_ast.trigger == NULL);
 	assert(pParse->nVar == 0);
 	assert(pParse->pVList == 0);
@@ -529,7 +529,7 @@ sqlite3RunParser(Parse * pParse, const char *zSql, char **pzErrMsg)
 		sqlite3VdbeDelete(pParse->pVdbe);
 		pParse->pVdbe = 0;
 	}
-	sqlite3DeleteTable(db, pParse->pNewTable);
+	sqlite3DeleteTable(db, pParse->create_table_def.new_table);
 
 	if (pParse->pWithToFree)
 		sqlite3WithDelete(db, pParse->pWithToFree);

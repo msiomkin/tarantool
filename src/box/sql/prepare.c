@@ -273,7 +273,6 @@ sql_parser_create(struct Parse *parser, sqlite3 *db)
 {
 	memset(parser, 0, sizeof(struct Parse));
 	parser->db = db;
-	rlist_create(&parser->new_fkey);
 	rlist_create(&parser->record_list);
 	region_create(&parser->region, &cord()->slabc);
 }
@@ -286,9 +285,6 @@ sql_parser_destroy(Parse *parser)
 	sqlite3 *db = parser->db;
 	sqlite3DbFree(db, parser->aLabel);
 	sql_expr_list_delete(db, parser->pConstExpr);
-	struct fkey_parse *fk;
-	rlist_foreach_entry(fk, &parser->new_fkey, link)
-		sql_expr_list_delete(db, fk->selfref_cols);
 	if (db != NULL) {
 		assert(db->lookaside.bDisable >=
 		       parser->disableLookaside);

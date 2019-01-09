@@ -1616,9 +1616,9 @@ void
 sql_resolve_self_reference(struct Parse *parser, struct Table *table, int type,
 			   struct Expr *expr, struct ExprList *expr_list)
 {
-	/* Fake SrcList for parser->pNewTable */
+	/* Fake SrcList for parser->create_table_def */
 	SrcList sSrc;
-	/* Name context for parser->pNewTable */
+	/* Name context for parser->create_table_def  */
 	NameContext sNC;
 
 	assert(type == NC_IsCheck || type == NC_IdxExpr);
