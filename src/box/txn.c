@@ -34,6 +34,7 @@
 #include "journal.h"
 #include <fiber.h>
 #include "xrow.h"
+#include "replication.h"
 
 double too_long_threshold;
 
@@ -141,6 +142,7 @@ txn_begin(bool is_autocommit)
 	/* Initialize members explicitly to save time on memset() */
 	stailq_create(&txn->stmts);
 	txn->n_rows = 0;
+	txn->n_remote_rows = 0;
 	txn->is_autocommit = is_autocommit;
 	txn->has_triggers  = false;
 	txn->is_aborted = false;
@@ -233,6 +235,9 @@ txn_commit_stmt(struct txn *txn, struct request *request)
 	if (stmt->space == NULL || !space_is_temporary(stmt->space)) {
 		if (txn_add_redo(stmt, request) != 0)
 			goto fail;
+		if (stmt->row->replica_id != 0 &&
+		    stmt->row->replica_id != instance_id)
+			++txn->n_remote_rows;
 		++txn->n_rows;
 	}
 	/*
@@ -271,14 +276,20 @@ txn_write_to_wal(struct txn *txn)
 		return -1;
 
 	struct txn_stmt *stmt;
-	struct xrow_header **row = req->rows;
+	struct xrow_header **remote_row = req->rows;
+	struct xrow_header **local_row = req->rows + txn->n_remote_rows;
 	stailq_foreach_entry(stmt, &txn->stmts, next) {
 		if (stmt->row == NULL)
 			continue; /* A read (e.g. select) request */
-		*row++ = stmt->row;
+		if (stmt->row->replica_id != 0 &&
+		    stmt->row->replica_id != instance_id)
+			*remote_row++ = stmt->row;
+		else
+			*local_row++ = stmt->row;
 		req->approx_len += xrow_approx_len(stmt->row);
 	}
-	assert(row == req->rows + req->n_rows);
+	assert(remote_row == req->rows + txn->n_remote_rows);
+	assert(local_row == req->rows + req->n_rows);
 
 	ev_tstamp start = ev_monotonic_now(loop());
 	int64_t res = journal_write(req);

@@ -36,6 +36,7 @@
 #include <tarantool_ev.h>
 
 #include <small/ibuf.h>
+#include <small/obuf.h>
 
 #include "fiber_cond.h"
 #include "trigger.h"
@@ -120,6 +121,10 @@ struct applier {
 	struct xstream *join_stream;
 	/** xstream to process rows during final JOIN and SUBSCRIBE */
 	struct xstream *subscribe_stream;
+	/** Array to store the current transaction rows. */
+	struct ibuf row_buf;
+	/** Data buffer to store the current transaction row's bodyes. */
+	struct obuf data_buf;
 };
 
 /**

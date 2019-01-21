@@ -48,6 +48,14 @@
 #include "error.h"
 #include "session.h"
 #include "cfg.h"
+#include "txn.h"
+
+enum {
+	/* Initial capacity for tx in rows. */
+	APPLIER_ROW_COUNT = 32,
+	/* Initial size of tx data buffer. */
+	APPLIER_ROW_DATA_SIZE = 0x1000,
+};
 
 STRS(applier_state, applier_STATE);
 
@@ -380,6 +388,117 @@ applier_join(struct applier *applier)
 }
 
 /**
+ * Read one transaction from network using applier's input buffer.
+ * Transaction rows are placed into row_buf as an array, row's bodies are
+ * placed into obuf because it is not allowed to relocate row's bodies.
+ * We could not use applier input buffer for that because rpos is adjusted
+ * after each xrow decoding and corresponding network input space is going
+ * to be reused.
+ *
+ * Also preserved rows data into a detached space (row and data buffers)
+ * make us able to continue networking and then issue next transactions even
+ * if the current one is still in progress.
+ */
+static int64_t
+applier_read_tx(struct applier *applier, struct ibuf *row_buf,
+		struct obuf *data_buf)
+{
+	struct xrow_header *row;
+	struct ev_io *coio = &applier->io;
+	struct ibuf *ibuf = &applier->ibuf;
+	int64_t txn_id = 0;
+
+	do {
+		row = (struct xrow_header *)ibuf_alloc(row_buf,
+						       sizeof(struct xrow_header));
+		if (row == NULL) {
+			diag_set(OutOfMemory, sizeof(struct xrow_header),
+				 "slab", "struct xrow_header");
+			goto error;
+		}
+
+		double timeout = replication_disconnect_timeout();
+		/*
+		 * Unfortunately we do not have C-version of coio read xrow
+		 * functions yet so use try-catch guard as workaround.
+		 */
+		try {
+			/*
+			 * Tarantool < 1.7.7 does not send periodic heartbeat
+			 * messages so we can't assume that if we haven't heard
+			 * from the master for quite a while the connection is
+			 * broken - the master might just be idle.
+			 */
+			if (applier->version_id < version_id(1, 7, 7))
+				coio_read_xrow(coio, ibuf, row);
+			else
+				coio_read_xrow_timeout_xc(coio, ibuf, row, timeout);
+		} catch (...) {
+			goto error;
+		}
+
+		if (iproto_type_is_error(row->type)) {
+			xrow_decode_error(row);
+			goto error;
+		}
+
+		/* Replication request. */
+		if (row->replica_id == REPLICA_ID_NIL ||
+		    row->replica_id >= VCLOCK_MAX) {
+			/*
+			 * A safety net, this can only occur
+			 * if we're fed a strangely broken xlog.
+			 */
+			diag_set(ClientError, ER_UNKNOWN_REPLICA,
+				 int2str(row->replica_id),
+				 tt_uuid_str(&REPLICASET_UUID));
+			goto error;
+		}
+		if (ibuf_used(row_buf) == sizeof(struct xrow_header)) {
+			/*
+			 * First row in a transaction. In order to enforce
+			 * consistency check that first row lsn and replica id
+			 * match with transaction.
+			 */
+			txn_id = row->txn_id;
+			if (row->lsn != txn_id) {
+				/* There is not a first row in the transactions. */
+				diag_set(ClientError, ER_PROTOCOL,
+					 "Not a first row in a transaction");
+				goto error;
+			}
+		}
+		if (txn_id != row->txn_id) {
+			/* We are not able to handle interleaving transactions. */
+			diag_set(ClientError, ER_UNSUPPORTED,
+				 "replications",
+				 "interleaving transactions");
+			goto error;
+		}
+
+
+		applier->lag = ev_now(loop()) - row->tm;
+		applier->last_row_time = ev_monotonic_now(loop());
+
+		if (row->body->iov_base != NULL) {
+			void *new_base = obuf_alloc(data_buf, row->body->iov_len);
+			if (new_base == NULL) {
+				diag_set(OutOfMemory, row->body->iov_len,
+					 "slab", "xrow_data");
+				goto error;
+			}
+			memcpy(new_base, row->body->iov_base, row->body->iov_len);
+			row->body->iov_base = new_base;
+		}
+
+	} while (row->is_commit == 0);
+
+	return 0;
+error:
+	return -1;
+}
+
+/**
  * Execute and process SUBSCRIBE request (follow updates from a master).
  */
 static void
@@ -390,6 +509,8 @@ applier_subscribe(struct applier *applier)
 	/* Send SUBSCRIBE request */
 	struct ev_io *coio = &applier->io;
 	struct ibuf *ibuf = &applier->ibuf;
+	struct ibuf *row_buf = &applier->row_buf;
+	struct obuf *data_buf = &applier->data_buf;
 	struct xrow_header row;
 	struct vclock remote_vclock_at_subscribe;
 	struct tt_uuid cluster_id = uuid_nil;
@@ -510,36 +631,16 @@ applier_subscribe(struct applier *applier)
 			applier_set_state(applier, APPLIER_FOLLOW);
 		}
 
-		/*
-		 * Tarantool < 1.7.7 does not send periodic heartbeat
-		 * messages so we can't assume that if we haven't heard
-		 * from the master for quite a while the connection is
-		 * broken - the master might just be idle.
-		 */
-		if (applier->version_id < version_id(1, 7, 7)) {
-			coio_read_xrow(coio, ibuf, &row);
-		} else {
-			double timeout = replication_disconnect_timeout();
-			coio_read_xrow_timeout_xc(coio, ibuf, &row, timeout);
-		}
+		if (applier_read_tx(applier, row_buf, data_buf) != 0)
+			diag_raise();
 
-		if (iproto_type_is_error(row.type))
-			xrow_decode_error_xc(&row);  /* error */
-		/* Replication request. */
-		if (row.replica_id == REPLICA_ID_NIL ||
-		    row.replica_id >= VCLOCK_MAX) {
-			/*
-			 * A safety net, this can only occur
-			 * if we're fed a strangely broken xlog.
-			 */
-			tnt_raise(ClientError, ER_UNKNOWN_REPLICA,
-				  int2str(row.replica_id),
-				  tt_uuid_str(&REPLICASET_UUID));
-		}
+		struct txn *txn = NULL;
+		struct xrow_header *first_row = (struct xrow_header *)row_buf->rpos;
+		struct xrow_header *last_row = (struct xrow_header *)row_buf->wpos - 1;
 
-		applier->lag = ev_now(loop()) - row.tm;
+		applier->lag = ev_now(loop()) - last_row->tm;
 		applier->last_row_time = ev_monotonic_now(loop());
-		struct replica *replica = replica_by_id(row.replica_id);
+		struct replica *replica = replica_by_id(first_row->replica_id);
 		struct latch *latch = (replica ? &replica->order_latch :
 				       &replicaset.applier.order_latch);
 		/*
@@ -549,34 +650,51 @@ applier_subscribe(struct applier *applier)
 		 * that belong to the same server id.
 		 */
 		latch_lock(latch);
-		if (vclock_get(&replicaset.vclock, row.replica_id) < row.lsn) {
-			int res = xstream_write(applier->subscribe_stream, &row);
-			if (res != 0) {
-				struct error *e = diag_last_error(diag_get());
-				/*
-				 * In case of ER_TUPLE_FOUND error and enabled
-				 * replication_skip_conflict configuration
-				 * option, skip applying the foreign row and
-				 * replace it with NOP in the local write ahead
-				 * log.
-				 */
-				if (e->type == &type_ClientError &&
+		if (vclock_get(&replicaset.vclock,
+			       first_row->replica_id) < first_row->lsn) {
+			struct xrow_header *row = first_row;
+			if (first_row != last_row)
+				txn = txn_begin(false);
+			int res = 0;
+			while (row <= last_row && res == 0) {
+				res = xstream_write(applier->subscribe_stream, row);
+				struct error *e;
+				if (res != 0 &&
+				    (e = diag_last_error(diag_get()))->type ==
+					    &type_ClientError &&
 				    box_error_code(e) == ER_TUPLE_FOUND &&
 				    replication_skip_conflict) {
+					/*
+					 * In case of ER_TUPLE_FOUND error and enabled
+					 * replication_skip_conflict configuration
+					 * option, skip applying the foreign row and
+					 * replace it with NOP in the local write ahead
+					 * log.
+					 */
 					diag_clear(diag_get());
-					struct xrow_header nop;
-					nop.type = IPROTO_NOP;
-					nop.bodycnt = 0;
-					nop.replica_id = row.replica_id;
-					nop.lsn = row.lsn;
-					res = xstream_write(applier->subscribe_stream, &nop);
+					row->type = IPROTO_NOP;
+					row->bodycnt = 0;
+					res = xstream_write(applier->subscribe_stream, row);
 				}
+				++row;
+			}
+			if (res == 0 && txn != NULL)
+				res = txn_commit(txn);
+
+			if (res != 0) {
+				txn_rollback();
+				obuf_reset(data_buf);
+				ibuf_reset(row_buf);
+				latch_unlock(latch);
+				diag_raise();
 			}
 			if (res != 0) {
 				latch_unlock(latch);
 				diag_raise();
 			}
 		}
+		obuf_reset(data_buf);
+		ibuf_reset(row_buf);
 		latch_unlock(latch);
 
 		if (applier->state == APPLIER_SYNC ||
@@ -601,6 +719,9 @@ applier_disconnect(struct applier *applier, enum applier_state state)
 	coio_close(loop(), &applier->io);
 	/* Clear all unparsed input. */
 	ibuf_reinit(&applier->ibuf);
+	ibuf_reinit(&applier->row_buf);
+	obuf_destroy(&applier->data_buf);
+	obuf_create(&applier->data_buf, &cord()->slabc, APPLIER_ROW_DATA_SIZE);
 	fiber_gc();
 }
 
@@ -743,6 +864,9 @@ applier_new(const char *uri, struct xstream *join_stream,
 	}
 	coio_create(&applier->io, -1);
 	ibuf_create(&applier->ibuf, &cord()->slabc, 1024);
+	ibuf_create(&applier->row_buf, &cord()->slabc,
+		    APPLIER_ROW_COUNT * sizeof(struct xrow_header));
+	obuf_create(&applier->data_buf, &cord()->slabc, APPLIER_ROW_DATA_SIZE);
 
 	/* uri_parse() sets pointers to applier->source buffer */
 	snprintf(applier->source, sizeof(applier->source), "%s", uri);
@@ -766,6 +890,8 @@ applier_delete(struct applier *applier)
 {
 	assert(applier->reader == NULL && applier->writer == NULL);
 	ibuf_destroy(&applier->ibuf);
+	ibuf_destroy(&applier->row_buf);
+	obuf_destroy(&applier->data_buf);
 	assert(applier->io.fd == -1);
 	trigger_destroy(&applier->on_state);
 	fiber_cond_destroy(&applier->resume_cond);

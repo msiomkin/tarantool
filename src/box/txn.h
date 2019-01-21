@@ -143,6 +143,10 @@ struct txn {
 	/** Total number of WAL rows in this txn. */
 	int n_rows;
 	/**
+	 * Count of rows generated on a remote replica.
+	 */
+	int n_remote_rows;
+	/**
 	 * True if this transaction is running in autocommit mode
 	 * (statement end causes an automatic transaction commit).
 	 */
