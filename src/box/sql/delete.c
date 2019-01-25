@@ -332,7 +332,7 @@ sql_table_delete_from(struct Parse *parse, struct SrcList *tab_list,
 			/* Set flag to save memory allocating one
 			 * by malloc.
 			 */
-			sqlVdbeChangeP5(v, 1);
+			sqlVdbeChangeP5(v, OPFLAG_IS_EPHEMERAL);
 			sqlVdbeAddOp2(v, OP_IdxInsert, reg_key, reg_eph);
 		}
 

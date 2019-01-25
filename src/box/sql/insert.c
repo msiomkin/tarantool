@@ -478,7 +478,7 @@ sqlInsert(Parse * pParse,	/* Parser context */
 			sqlVdbeAddOp3(v, OP_MakeRecord, regCopy,
 					  nColumn + 1, regRec);
 			/* Set flag to save memory allocating one by malloc. */
-			sqlVdbeChangeP5(v, 1);
+			sqlVdbeChangeP5(v, OPFLAG_IS_EPHEMERAL);
 			sqlVdbeAddOp2(v, OP_IdxInsert, regRec, reg_eph);
 
 			sqlVdbeGoto(v, addrL);

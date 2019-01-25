@@ -1151,7 +1151,7 @@ selectInnerLoop(Parse * pParse,		/* The parser context */
 			sqlVdbeAddOp3(v, OP_MakeRecord, regResult,
 					  nResultCol, r1 + nPrefixReg);
 			/* Set flag to save memory allocating one by malloc. */
-			sqlVdbeChangeP5(v, 1);
+			sqlVdbeChangeP5(v, OPFLAG_IS_EPHEMERAL);
 #ifndef SQL_OMIT_CTE
 			if (eDest == SRT_DistFifo) {
 				/* If the destination is DistFifo, then cursor (iParm+1) is open
@@ -1188,7 +1188,7 @@ selectInnerLoop(Parse * pParse,		/* The parser context */
 				sqlVdbeAddOp3(v, OP_Copy, regResult, regCopy, nResultCol - 1);
 				sqlVdbeAddOp3(v, OP_MakeRecord, regCopy, nResultCol + 1, regRec);
 				/* Set flag to save memory allocating one by malloc. */
-				sqlVdbeChangeP5(v, 1);
+				sqlVdbeChangeP5(v, OPFLAG_IS_EPHEMERAL);
 				sqlVdbeAddOp2(v, OP_IdxInsert, regRec, pDest->reg_eph);
 				sqlReleaseTempReg(pParse, regRec);
 				sqlReleaseTempRange(pParse, regCopy, nResultCol + 1);
@@ -3084,7 +3084,7 @@ generateOutputSubroutine(struct Parse *parse, struct Select *p,
 			sqlVdbeAddOp3(v, OP_MakeRecord, regCopy,
 					  in->nSdst + 1, regRec);
 			/* Set flag to save memory allocating one by malloc. */
-			sqlVdbeChangeP5(v, 1);
+			sqlVdbeChangeP5(v, OPFLAG_IS_EPHEMERAL);
 			sqlVdbeAddOp2(v, OP_IdxInsert, regRec, dest->reg_eph);
 			sqlReleaseTempRange(parse, regCopy, in->nSdst + 1);
 			sqlReleaseTempReg(parse, regRec);

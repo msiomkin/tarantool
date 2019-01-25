@@ -285,7 +285,7 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 		 * Set flag to save memory allocating one by
 		 * malloc.
 		 */
-		sqlVdbeChangeP5(v, 1);
+		sqlVdbeChangeP5(v, OPFLAG_IS_EPHEMERAL);
 		sqlVdbeAddOp2(v, OP_IdxInsert, regKey, reg_eph);
 	}
 	/* End the database scan loop.
