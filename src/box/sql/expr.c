@@ -2396,19 +2396,20 @@ sqlFindInIndex(Parse * pParse,	/* Parsing context */
 			     eType == 0; ++k) {
 				struct index *idx = space->index[k];
 				Bitmask colUsed; /* Columns of the index used */
-				Bitmask mCol;	/* Mask for the current column */
 				uint32_t part_count =
 					idx->def->key_def->part_count;
 				struct key_part *parts =
 					idx->def->key_def->parts;
 				if ((int)part_count < nExpr)
 					continue;
-				/* Maximum nColumn is BMS-2, not BMS-1, so that we can compute
-				 * BITMASK(nExpr) without overflowing
+				/*
+				 * Maximum fieldno is
+				 * BITMASK_SIZE-2, not
+				 * BITMASK_SIZE-1, so that we
+				 * can compute bitmask without
+				 * overflowing.
 				 */
-				testcase(part_count == BMS - 2);
-				testcase(part_count == BMS - 1);
-				if (part_count >= BMS - 1)
+				if (part_count >= BITMASK_SIZE - 1)
 					continue;
 				if (mustBeUnique &&
 				    ((int)part_count > nExpr ||
@@ -2444,19 +2445,23 @@ sqlFindInIndex(Parse * pParse,	/* Parsing context */
 					}
 					if (j == nExpr)
 						break;
-					mCol = MASKBIT(j);
-					if (mCol & colUsed)
-						break;	/* Each column used only once */
-					colUsed |= mCol;
+					/*
+					 * Each column used only
+					 * once.
+					 */
+					if (column_mask_fieldno_is_set(colUsed,
+								       j))
+						break;
+					column_mask_set_fieldno(&colUsed, j);
 					if (aiMap)
 						aiMap[i] = pRhs->iColumn;
 					else if (pSingleIdxCol && nExpr == 1)
 						*pSingleIdxCol = pRhs->iColumn;
 					}
 
-				assert(i == nExpr
-				       || colUsed != (MASKBIT(nExpr) - 1));
-				if (colUsed == (MASKBIT(nExpr) - 1)) {
+				assert(i == nExpr ||
+				       colUsed != (BITMASK_BIT(nExpr) - 1));
+				if (colUsed == (BITMASK_BIT(nExpr) - 1)) {
 					/* If we reach this point, that means the index pIdx is usable */
 					int iAddr = sqlVdbeAddOp0(v, OP_Once);
 					VdbeCoverage(v);

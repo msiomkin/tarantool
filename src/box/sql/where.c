@@ -219,9 +219,8 @@ sqlWhereGetMask(WhereMaskSet * pMaskSet, int iCursor)
 	int i;
 	assert(pMaskSet->n <= (int)sizeof(Bitmask) * 8);
 	for (i = 0; i < pMaskSet->n; i++) {
-		if (pMaskSet->ix[i] == iCursor) {
-			return MASKBIT(i);
-		}
+		if (pMaskSet->ix[i] == iCursor)
+			return BITMASK_BIT(i);
 	}
 	return 0;
 }
@@ -731,12 +730,10 @@ constructAutomaticIndex(Parse * pParse,			/* The parsing context */
 	int regRecord;		/* Register holding an index record */
 	int n;			/* Column counter */
 	int i;			/* Loop counter */
-	int mxBitCol;		/* Maximum column in pSrc->colUsed */
 	struct coll *pColl;		/* Collating sequence to on a column */
 	WhereLoop *pLoop;	/* The Loop object */
 	char *zNotUsed;		/* Extra space on the end of pIdx */
 	Bitmask idxCols;	/* Bitmap of columns used for indexing */
-	Bitmask extraCols;	/* Bitmap of additional columns */
 	u8 sentWarning = 0;	/* True if a warnning has been issued */
 	int iContinue = 0;	/* Jump here to skip excluded rows */
 	struct SrcList_item *pTabItem;	/* FROM clause term being indexed */
@@ -762,10 +759,8 @@ constructAutomaticIndex(Parse * pParse,			/* The parsing context */
 	for (pTerm = pWC->a; pTerm < pWCEnd; pTerm++) {
 		if (termCanDriveIndex(pTerm, pSrc, notReady)) {
 			int iCol = pTerm->u.leftColumn;
-			Bitmask cMask =
-			    iCol >= BMS ? MASKBIT(BMS - 1) : MASKBIT(iCol);
-			testcase(iCol == BMS);
-			testcase(iCol == BMS - 1);
+			uint64_t column_mask;
+			column_mask_set_fieldno(&column_mask, iCol);
 			if (!sentWarning) {
 				sql_log(SQL_WARNING_AUTOINDEX,
 					    "automatic index on %s(%s)",
@@ -773,13 +768,13 @@ constructAutomaticIndex(Parse * pParse,			/* The parsing context */
 					    pTable->aCol[iCol].zName);
 				sentWarning = 1;
 			}
-			if ((idxCols & cMask) == 0) {
+			if ((idxCols & column_mask) == 0) {
 				if (whereLoopResize
 				    (pParse->db, pLoop, nKeyCol + 1)) {
 					goto end_auto_index_create;
 				}
 				pLoop->aLTerm[nKeyCol++] = pTerm;
-				idxCols |= cMask;
+				idxCols |= column_mask;
 			}
 		}
 	}
@@ -796,17 +791,17 @@ constructAutomaticIndex(Parse * pParse,			/* The parsing context */
 	 * original table changes and the index and table cannot both be used
 	 * if they go out of sync.
 	 */
-	extraCols = pSrc->colUsed & (~idxCols | MASKBIT(BMS - 1));
-	mxBitCol = MIN(BMS - 1, pTable->def->field_count);
-	testcase(pTable->def->field_count == BMS - 1);
-	testcase(pTable->def->field_count == BMS - 2);
-	for (i = 0; i < mxBitCol; i++) {
-		if (extraCols & MASKBIT(i))
+	/* Bitmap of additional columns. */
+	uint64_t extra_cols = pSrc->colUsed &
+			     (~idxCols | BITMASK_BIT(BITMASK_SIZE - 1));
+	/* Maximum column in pSrc->colUsed. */
+	int max_col_idx = MIN(BITMASK_SIZE - 1, pTable->def->field_count);
+	for (i = 0; i < max_col_idx; i++) {
+		if (column_mask_fieldno_is_set(extra_cols, i))
 			nKeyCol++;
 	}
-	if (pSrc->colUsed & MASKBIT(BMS - 1)) {
-		nKeyCol += pTable->def->field_count - BMS + 1;
-	}
+	if (column_mask_is_overflowed(pSrc->colUsed))
+		nKeyCol += pTable->def->field_count - BITMASK_SIZE + 1;
 
 	/* Construct the Index object to describe this index */
 	pIdx = sqlDbMallocZero(pParse->db, sizeof(*pIdx));
@@ -820,13 +815,11 @@ constructAutomaticIndex(Parse * pParse,			/* The parsing context */
 	for (pTerm = pWC->a; pTerm < pWCEnd; pTerm++) {
 		if (termCanDriveIndex(pTerm, pSrc, notReady)) {
 			int iCol = pTerm->u.leftColumn;
-			Bitmask cMask =
-			    iCol >= BMS ? MASKBIT(BMS - 1) : MASKBIT(iCol);
-			testcase(iCol == BMS - 1);
-			testcase(iCol == BMS);
-			if ((idxCols & cMask) == 0) {
+			uint64_t column_mask;
+			column_mask_set_fieldno(&column_mask, iCol);
+			if ((idxCols & column_mask) == 0) {
 				Expr *pX = pTerm->pExpr;
-				idxCols |= cMask;
+				idxCols |= column_mask;
 				pIdx->aiColumn[n] = pTerm->u.leftColumn;
 				n++;
 			}
@@ -837,14 +830,15 @@ constructAutomaticIndex(Parse * pParse,			/* The parsing context */
 	/* Add additional columns needed to make the automatic index into
 	 * a covering index
 	 */
-	for (i = 0; i < mxBitCol; i++) {
-		if (extraCols & MASKBIT(i)) {
+	for (i = 0; i < max_col_idx; i++) {
+		if (column_mask_fieldno_is_set(extra_cols, i)) {
 			pIdx->aiColumn[n] = i;
 			n++;
 		}
 	}
-	if (pSrc->colUsed & MASKBIT(BMS - 1)) {
-		for (i = BMS - 1; i < (int)pTable->def->field_count; i++) {
+	if (column_mask_is_overflowed(pSrc->colUsed)) {
+		for (i = BITMASK_SIZE - 1;
+		     i < (int)pTable->def->field_count; i++) {
 			pIdx->aiColumn[n] = i;
 			n++;
 		}
@@ -3201,11 +3195,11 @@ wherePathSatisfiesOrderBy(WhereInfo * pWInfo,	/* The WHERE clause */
 		return 0;
 
 	nOrderBy = pOrderBy->nExpr;
-	testcase(nOrderBy == BMS - 1);
-	if (nOrderBy > BMS - 1)
-		return 0;	/* Cannot optimize overly large ORDER BYs */
+	/* Cannot optimize overly large ORDER BYs. */
+	if (nOrderBy > BITMASK_SIZE - 1)
+		return 0;
 	isOrderDistinct = 1;
-	obDone = MASKBIT(nOrderBy) - 1;
+	obDone = BITMASK_BIT(nOrderBy) - 1;
 	orderDistinctMask = 0;
 	ready = 0;
 	eqOpMask = WO_EQ | WO_ISNULL;
@@ -3230,7 +3224,7 @@ wherePathSatisfiesOrderBy(WhereInfo * pWInfo,	/* The WHERE clause */
 		 * loops.
 		 */
 		for (i = 0; i < nOrderBy; i++) {
-			if (MASKBIT(i) & obSat)
+			if (column_mask_fieldno_is_set(obSat, i))
 				continue;
 			pOBExpr = sqlExprSkipCollate(pOrderBy->a[i].pExpr);
 			if (pOBExpr->op != TK_COLUMN)
@@ -3270,7 +3264,7 @@ wherePathSatisfiesOrderBy(WhereInfo * pWInfo,	/* The WHERE clause */
 				if (coll1 != coll2)
 					continue;
 			}
-			obSat |= MASKBIT(i);
+			column_mask_set_fieldno(&obSat, i);
 		}
 
 		if ((pLoop->wsFlags & WHERE_ONEROW) == 0) {
@@ -3369,7 +3363,7 @@ wherePathSatisfiesOrderBy(WhereInfo * pWInfo,	/* The WHERE clause */
 				 */
 				isMatch = 0;
 				for (i = 0; bOnce && i < nOrderBy; i++) {
-					if (MASKBIT(i) & obSat)
+					if (column_mask_fieldno_is_set(obSat, i))
 						continue;
 					pOBExpr =
 					    sqlExprSkipCollate(pOrderBy-> a[i].pExpr);
@@ -3415,14 +3409,15 @@ wherePathSatisfiesOrderBy(WhereInfo * pWInfo,	/* The WHERE clause */
 						rev =
 						    revIdx ^ pOrderBy->a[i].
 						    sort_order;
-						if (rev)
-							*pRevMask |=
-							    MASKBIT(iLoop);
+						if (rev) {
+							column_mask_set_fieldno(
+								pRevMask, iLoop);
+						}
 						revSet = 1;
 					}
 				}
 				if (isMatch) {
-					obSat |= MASKBIT(i);
+					column_mask_set_fieldno(&obSat, i);
 				} else {
 					/* No match found */
 					if (j == 0 || j < nColumn) {
@@ -3445,16 +3440,15 @@ wherePathSatisfiesOrderBy(WhereInfo * pWInfo,	/* The WHERE clause */
 			for (i = 0; i < nOrderBy; i++) {
 				Expr *p;
 				Bitmask mTerm;
-				if (MASKBIT(i) & obSat)
+				if (column_mask_fieldno_is_set(obSat, i))
 					continue;
 				p = pOrderBy->a[i].pExpr;
 				mTerm =
 				    sqlWhereExprUsage(&pWInfo->sMaskSet, p);
 				if (mTerm == 0 && !sqlExprIsConstant(p))
 					continue;
-				if ((mTerm & ~orderDistinctMask) == 0) {
-					obSat |= MASKBIT(i);
-				}
+				if ((mTerm & ~orderDistinctMask) == 0)
+					column_mask_set_fieldno(&obSat, i);
 			}
 		}
 	}			/* End the loop over all WhereLoops from outer-most down to inner-most */
@@ -3462,7 +3456,7 @@ wherePathSatisfiesOrderBy(WhereInfo * pWInfo,	/* The WHERE clause */
 		return (i8) nOrderBy;
 	if (!isOrderDistinct) {
 		for (i = nOrderBy - 1; i > 0; i--) {
-			Bitmask m = MASKBIT(i) - 1;
+			uint32_t m = BITMASK_BIT(i) - 1;
 			if ((obSat & m) == m)
 				return i;
 		}
@@ -4269,8 +4263,7 @@ sqlWhereBegin(Parse * pParse,	/* The parser context */
 	memset(&sWLB, 0, sizeof(sWLB));
 
 	/* An ORDER/GROUP BY clause of more than 63 terms cannot be optimized */
-	testcase(pOrderBy && pOrderBy->nExpr == BMS - 1);
-	if (pOrderBy && pOrderBy->nExpr >= BMS)
+	if (pOrderBy && pOrderBy->nExpr >= BITMASK_SIZE)
 		pOrderBy = 0;
 	sWLB.pOrderBy = pOrderBy;
 
@@ -4284,9 +4277,9 @@ sqlWhereBegin(Parse * pParse,	/* The parser context */
 	/* The number of tables in the FROM clause is limited by the number of
 	 * bits in a Bitmask
 	 */
-	testcase(pTabList->nSrc == BMS);
-	if (pTabList->nSrc > BMS) {
-		sqlErrorMsg(pParse, "at most %d tables in a join", BMS);
+	if (pTabList->nSrc > BITMASK_SIZE) {
+		sqlErrorMsg(pParse, "at most %d tables in a join",
+			    BITMASK_SIZE);
 		return 0;
 	}
 
@@ -4388,7 +4381,7 @@ sqlWhereBegin(Parse * pParse,	/* The parser context */
 	for (ii = 0; ii < pTabList->nSrc; ii++) {
 		Bitmask m =
 		    sqlWhereGetMask(pMaskSet, pTabList->a[ii].iCursor);
-		assert(m == MASKBIT(ii));
+		assert(m == BITMASK_BIT(ii));
 	}
 #endif
 
@@ -4455,7 +4448,7 @@ sqlWhereBegin(Parse * pParse,	/* The parser context */
 	}
 	if (pWInfo->pOrderBy == 0 &&
 	    (user_session->sql_flags & SQL_ReverseOrder) != 0) {
-		pWInfo->revMask = ALLBITS;
+		pWInfo->revMask = COLUMN_MASK_FULL;
 	}
 	if (pParse->nErr || NEVER(db->mallocFailed)) {
 		goto whereBeginError;
@@ -4653,13 +4646,11 @@ sqlWhereBegin(Parse * pParse,	/* The parser context */
 							continue;
 						if (jj > 63)
 							jj = 63;
-						if ((pTabItem->
-						     colUsed & MASKBIT(jj)) ==
-						    0)
+						if (!column_mask_fieldno_is_set(
+							&pTabItem->colUsed, i))
 							continue;
-						colUsed |=
-						    ((u64) 1) << (ii <
-								  63 ? ii : 63);
+						column_mask_set_fieldno(&colUsed,
+									ii);
 					}
 					sqlVdbeAddOp4Dup8(v, OP_ColumnsUsed,
 							      iIndexCur, 0, 0,

@@ -2234,28 +2234,12 @@ struct IdList {
 };
 
 /*
- * The bitmask datatype defined below is used for various optimizations.
- *
- * Changing this from a 64-bit to a 32-bit type limits the number of
- * tables in a join to 32 instead of 64.  But it also reduces the size
- * of the library by 738 bytes on ix86.
+ * The bitmask datatype defined below is used for various
+ * optimizations.
  */
-#ifdef SQL_BITMASK_TYPE
-typedef SQL_BITMASK_TYPE Bitmask;
-#else
-typedef u64 Bitmask;
-#endif
-
-/*
- * The number of bits in a Bitmask.  "BMS" means "BitMask Size".
- */
-#define BMS  ((int)(sizeof(Bitmask)*8))
-
-/*
- * A bit in a Bitmask
- */
-#define MASKBIT(n)   (((Bitmask)1)<<(n))
-#define ALLBITS      ((Bitmask)-1)
+typedef uint64_t Bitmask;
+#define BITMASK_SIZE ((int)sizeof(Bitmask)*CHAR_BIT)
+#define BITMASK_BIT(n)   (((Bitmask)1)<<(n))
 
 /*
  * The following structure describes the FROM clause of a SELECT statement.

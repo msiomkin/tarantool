@@ -379,7 +379,8 @@ struct WhereAndInfo {
  */
 struct WhereMaskSet {
 	int n;			/* Number of assigned cursor values */
-	int ix[BMS];		/* Cursor assigned to each bit */
+	/* Cursor assigned to each bit. */
+	int ix[BITMASK_SIZE];
 };
 
 /*
