@@ -1,5 +1,5 @@
 	*** main ***
-1..27
+1..35
 ok 1 - check result length
 ok 2 - tuple update is correct
 ok 3 - column_mask is correct
@@ -27,4 +27,12 @@ ok 24 - column_mask is correct
 ok 25 - check result length
 ok 26 - tuple update is correct
 ok 27 - column_mask is correct
+ok 28 - 64 bitmask internal bit
+ok 29 - 64 bitmask is not overflowed
+ok 30 - 64 bitmask external bit
+ok 31 - 64 bitmask is overflowed
+ok 32 - 32 bitmask internal bit
+ok 33 - 32 bitmask is not overflowed
+ok 34 - 32 bitmask external bit
+ok 35 - 32 bitmask is overflowed
 	*** main: done ***

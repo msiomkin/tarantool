@@ -95,6 +95,31 @@ column_mask_set_range(uint64_t *column_mask, uint32_t first_fieldno_in_range)
 }
 
 /**
+ * Test if overflow flag set in bitmask.
+ * @param column_mask Mask to test.
+ * @retval true If mask overflowed, false otherwise.
+ */
+static inline bool
+column_mask_is_overflowed(uint64_t column_mask)
+{
+	return column_mask & ((uint64_t)1 << 63);
+}
+
+/**
+ * Test a bit in the bitmask corresponding to a column fieldno.
+ * @param column_mask Mask to test.
+ * @param fieldno Fieldno number to test (index base must be 0).
+ * @retval true If bit corresponding to a column fieldno.
+ * @retval false if bit is not set or fieldno > 64.
+ */
+static inline bool
+column_mask_fieldno_is_set(uint64_t column_mask, uint32_t fieldno)
+{
+	uint64_t mask = (uint64_t) 1 << (fieldno < 63 ? fieldno : 63);
+	return (column_mask & mask) != 0;
+}
+
+/**
  * True if the update operation does not change the key.
  * @param key_mask Key mask.
  * @param update_mask Column mask of the update operation.
@@ -107,6 +132,47 @@ static inline bool
 key_update_can_be_skipped(uint64_t key_mask, uint64_t update_mask)
 {
 	return (key_mask & update_mask) == 0;
+}
+
+/**
+ * Set a bit in the 32-bit bitmask corresponding to a single
+ * changed column.
+ * @param column_mask Mask to update.
+ * @param fieldno     Updated fieldno (index base must be 0).
+ */
+static inline void
+column_mask32_set_fieldno(uint32_t *column_mask, uint32_t fieldno)
+{
+	if (fieldno >= 31)
+		*column_mask |= ((uint32_t) 1) << 31;
+	else
+		*column_mask |= ((uint32_t) 1) << fieldno;
+}
+
+/**
+ * Test a bit in the 32-bit bitmask corresponding to a column
+ * fieldno.
+ * @param column_mask Mask to test.
+ * @param fieldno Fieldno number to test (index base must be 0).
+ * @retval true If bit corresponding to a column fieldno.
+ * @retval false if bit is not set or fieldno > 64.
+ */
+static inline bool
+column_mask32_fieldno_is_set(uint32_t column_mask, uint32_t fieldno)
+{
+	uint32_t mask = (uint32_t) 1 << (fieldno < 31 ? fieldno : 31);
+	return (column_mask & mask) != 0;
+}
+
+/**
+ * Test if overflow flag set in 32-bit bitmask.
+ * @param column_mask Mask to test.
+ * @retval true If mask overflowed, false otherwise.
+ */
+static inline bool
+column_mask32_is_overflowed(uint32_t column_mask)
+{
+	return column_mask & ((uint32_t) 1 << 31);
 }
 
 #endif

@@ -236,13 +236,44 @@ basic_test()
 				    column_masks[i]);
 }
 
+static inline void
+helpers_test()
+{
+	uint64_t bitmask = 0;
+	column_mask_set_fieldno(&bitmask, 33);
+	is(column_mask_fieldno_is_set(bitmask, 33), true,
+	   "64 bitmask internal bit");
+	is(column_mask_is_overflowed(bitmask), false,
+	   "64 bitmask is not overflowed");
+
+	column_mask_set_fieldno(&bitmask, 74);
+	is(column_mask_fieldno_is_set(bitmask, 74), true,
+	   "64 bitmask external bit");
+	is(column_mask_is_overflowed(bitmask), true,
+	   "64 bitmask is overflowed");
+
+	uint32_t bitmask32 = 0;
+	column_mask32_set_fieldno(&bitmask32, 23);
+	is(column_mask32_fieldno_is_set(bitmask32, 23), true,
+	   "32 bitmask internal bit");
+	is(column_mask32_is_overflowed(bitmask32), false,
+	   "32 bitmask is not overflowed");
+
+	column_mask32_set_fieldno(&bitmask32, 54);
+	is(column_mask32_fieldno_is_set(bitmask32, 54), true,
+	   "32 bitmask external bit");
+	is(column_mask32_is_overflowed(bitmask32), true,
+	   "32 bitmask is overflowed");
+}
+
 int
 main()
 {
 	header();
-	plan(27);
+	plan(35);
 
 	basic_test();
+	helpers_test();
 
 	footer();
 	check_plan();
