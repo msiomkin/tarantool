@@ -3914,7 +3914,11 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 			int nFarg;	/* Number of function arguments */
 			FuncDef *pDef;	/* The function definition object */
 			const char *zId;	/* The function name */
-			u32 constMask = 0;	/* Mask of function arguments that are constant */
+			/*
+			 * Mask of function arguments that are
+			 * constant.
+			 */
+			uint32_t const_mask = 0;
 			int i;	/* Loop counter */
 			sql *db = pParse->db;	/* The database connection */
 			struct coll *coll = NULL;
@@ -3988,11 +3992,10 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 			}
 
 			for (i = 0; i < nFarg; i++) {
-				if (i < 32
-				    && sqlExprIsConstant(pFarg->a[i].
-							     pExpr)) {
-					testcase(i == 31);
-					constMask |= MASKBIT32(i);
+				if (i < 32 &&
+				    sqlExprIsConstant(pFarg->a[i].pExpr)) {
+					column_mask32_set_fieldno(&const_mask,
+								  i);
 				}
 				if ((pDef->funcFlags & SQL_FUNC_NEEDCOLL) !=
 				    0 && coll == NULL) {
@@ -4004,7 +4007,7 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 				}
 			}
 			if (pFarg) {
-				if (constMask) {
+				if (const_mask != 0) {
 					r1 = pParse->nMem + 1;
 					pParse->nMem += nFarg;
 				} else {
@@ -4052,12 +4055,11 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 				sqlVdbeAddOp4(v, OP_CollSeq, 0, 0, 0,
 						  (char *)coll, P4_COLLSEQ);
 			}
-			sqlVdbeAddOp4(v, OP_Function0, constMask, r1,
-					  target, (char *)pDef, P4_FUNCDEF);
+			sqlVdbeAddOp4(v, OP_Function0, const_mask, r1, target,
+				      (char *)pDef, P4_FUNCDEF);
 			sqlVdbeChangeP5(v, (u8) nFarg);
-			if (nFarg && constMask == 0) {
+			if (nFarg && const_mask == 0)
 				sqlReleaseTempRange(pParse, r1, nFarg);
-			}
 			return target;
 		}
 	case TK_EXISTS:

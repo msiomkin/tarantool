@@ -2698,11 +2698,9 @@ sqlVdbeDeleteAuxData(sql * db, AuxData ** pp, int iOp, int mask)
 {
 	while (*pp) {
 		AuxData *pAux = *pp;
-		if ((iOp < 0)
-		    || (pAux->iOp == iOp
-			&& (pAux->iArg > 31 || !(mask & MASKBIT32(pAux->iArg))))
-		    ) {
-			testcase(pAux->iArg == 31);
+		if (iOp < 0 || (pAux->iOp == iOp &&
+		    (pAux->iArg >= 32 ||
+		     !column_mask32_fieldno_is_set(mask, pAux->iArg)))) {
 			if (pAux->xDelete) {
 				pAux->xDelete(pAux->pAux);
 			}
