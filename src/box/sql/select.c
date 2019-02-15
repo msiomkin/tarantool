@@ -4193,10 +4193,18 @@ flattenSubquery(Parse * pParse,		/* Parsing context */
 		pList = pParent->pEList;
 		for (i = 0; i < pList->nExpr; i++) {
 			if (pList->a[i].zName == 0) {
-				char *zName =
-				    sqlDbStrDup(db, pList->a[i].zSpan);
-				sqlNormalizeName(zName);
-				pList->a[i].zName = zName;
+				char *str = pList->a[i].zSpan;
+				int len = strlen(str);
+				int name_len =
+					sql_normalize_name(NULL, 0, str, len);
+				if (name_len < 0)
+					goto tarantool_error;
+				char *name = sqlDbMallocRawNN(db, name_len + 1);
+				if (name != NULL &&
+				    sql_normalize_name(name, name_len + 1, str,
+						       len) < 0)
+					goto tarantool_error;
+				pList->a[i].zName = name;
 			}
 		}
 		if (pSub->pOrderBy) {
@@ -4273,6 +4281,9 @@ flattenSubquery(Parse * pParse,		/* Parsing context */
 	}
 #endif
 
+	return 1;
+tarantool_error:
+	sql_parser_error(pParse);
 	return 1;
 }
 

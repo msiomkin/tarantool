@@ -22,6 +22,8 @@ errinj.info()
     state: false
   ERRINJ_SNAP_WRITE_ROW_TIMEOUT:
     state: 0
+  ERRINJ_SQL_NAME_NORMALIZATION:
+    state: false
   ERRINJ_VY_SCHED_TIMEOUT:
     state: 0
   ERRINJ_WAL_WRITE_PARTIAL:
@@ -1671,4 +1673,22 @@ fio = require('fio')
 ...
 box.space.test:drop()
 ---
+...
+--
+-- gh-3931: Store regular identifiers in case-normal form
+--
+errinj = box.error.injection
+---
+...
+errinj.set("ERRINJ_SQL_NAME_NORMALIZATION", true)
+---
+- ok
+...
+box.sql.execute("CREATE TABLE hello (id INT primary key,x INT,y INT);")
+---
+- error: 'string conversion to the uppercase failed: U_MEMORY_ALLOCATION_ERROR'
+...
+errinj.set("ERRINJ_SQL_NAME_NORMALIZATION", false)
+---
+- ok
 ...

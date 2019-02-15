@@ -587,3 +587,11 @@ fio = require('fio')
 #fio.glob(fio.pathjoin(box.cfg.vinyl_dir, box.space.test.id, 0, '*.index.inprogress')) == 0
 
 box.space.test:drop()
+
+--
+-- gh-3931: Store regular identifiers in case-normal form
+--
+errinj = box.error.injection
+errinj.set("ERRINJ_SQL_NAME_NORMALIZATION", true)
+box.sql.execute("CREATE TABLE hello (id INT primary key,x INT,y INT);")
+errinj.set("ERRINJ_SQL_NAME_NORMALIZATION", false)
