@@ -201,6 +201,12 @@ swim_scheduler_bind(struct swim_scheduler *scheduler,
 }
 
 void
+swim_scheduler_stop_input(struct swim_scheduler *scheduler)
+{
+	swim_ev_io_stop(loop(), &scheduler->input);
+}
+
+void
 swim_scheduler_destroy(struct swim_scheduler *scheduler)
 {
 	struct swim_task *t, *tmp;
@@ -215,7 +221,7 @@ swim_scheduler_destroy(struct swim_scheduler *scheduler)
 	}
 	swim_transport_destroy(&scheduler->transport);
 	swim_ev_io_stop(loop(), &scheduler->output);
-	swim_ev_io_stop(loop(), &scheduler->input);
+	swim_scheduler_stop_input(scheduler);
 }
 
 static void
