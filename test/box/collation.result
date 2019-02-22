@@ -1,0 +1,160 @@
+env = require('test_run')
+---
+...
+test_run = env.new()
+---
+...
+--
+-- gh-4007 Feature request for a new collation
+--
+-- Ensure all default collations exist
+box.space._collation.index.name:get{'unicode'};
+---
+- [1, 'unicode', 1, 'ICU', '', {}]
+...
+box.space._collation.index.name:get{'unicode_ci'};
+---
+- [2, 'unicode_ci', 1, 'ICU', '', {'strength': 'primary'}]
+...
+box.space._collation.index.name:get{'unicode_s2'};
+---
+- [3, 'unicode_s2', 1, 'ICU', 'ru_RU', {'strength': 'secondary'}]
+...
+-- Default unicode collation deals with russian letters
+s = box.schema.space.create('t1');
+---
+...
+s:format({{name='s1', type='string', collation = 'unicode'}});
+---
+...
+s:create_index('pk', {unique = true, type='tree', parts={{'s1', collation = 'unicode'}}});
+---
+- unique: true
+  parts:
+  - type: string
+    is_nullable: false
+    collation: unicode
+    fieldno: 1
+  id: 0
+  space_id: 512
+  name: pk
+  type: TREE
+...
+s:insert{'Ё'};
+---
+- ['Ё']
+...
+s:insert{'Е'};
+---
+- ['Е']
+...
+s:insert{'ё'};
+---
+- ['ё']
+...
+s:insert{'е'};
+---
+- ['е']
+...
+-- all 4 letters are in the table
+s:select{};
+---
+- - ['е']
+  - ['Е']
+  - ['ё']
+  - ['Ё']
+...
+s:drop();
+---
+...
+-- unicode_ci collation doesn't distinguish russian letters 'Е' and 'Ё'
+s = box.schema.space.create('t1');
+---
+...
+s:format({{name='s1', type='string', collation = 'unicode_ci'}});
+---
+...
+s:create_index('pk', {unique = true, type='tree', parts={{'s1', collation = 'unicode_ci'}}});
+---
+- unique: true
+  parts:
+  - type: string
+    is_nullable: false
+    collation: unicode_ci
+    fieldno: 1
+  id: 0
+  space_id: 513
+  name: pk
+  type: TREE
+...
+s:insert{'Ё'};
+---
+- ['Ё']
+...
+-- the following calls should fail
+s:insert{'е'};
+---
+- error: Duplicate key exists in unique index 'pk' in space 't1'
+...
+s:insert{'Е'};
+---
+- error: Duplicate key exists in unique index 'pk' in space 't1'
+...
+s:insert{'ё'};
+---
+- error: Duplicate key exists in unique index 'pk' in space 't1'
+...
+-- return single 'Ё'
+s:select{};
+---
+- - ['Ё']
+...
+s:drop();
+---
+...
+-- unicode_s2 collation does distinguish russian letters 'Е' and 'Ё'
+s = box.schema.space.create('t1');
+---
+...
+s:format({{name='s1', type='string', collation = 'unicode_s2'}});
+---
+...
+s:create_index('pk', {unique = true, type='tree', parts={{'s1', collation = 'unicode_s2'}}});
+---
+- unique: true
+  parts:
+  - type: string
+    is_nullable: false
+    collation: unicode_s2
+    fieldno: 1
+  id: 0
+  space_id: 514
+  name: pk
+  type: TREE
+...
+s:insert{'Ё'};
+---
+- ['Ё']
+...
+s:insert{'е'};
+---
+- ['е']
+...
+-- the following calls should fail
+s:insert{'Е'};
+---
+- error: Duplicate key exists in unique index 'pk' in space 't1'
+...
+s:insert{'ё'};
+---
+- error: Duplicate key exists in unique index 'pk' in space 't1'
+...
+-- return two: 'Ё' and 'е'
+s:select{};
+---
+- - ['е']
+  - ['Ё']
+...
+s:drop();
+---
+...

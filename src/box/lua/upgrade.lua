@@ -998,9 +998,15 @@ local function create_vinyl_deferred_delete_space()
                   'blackhole', 0, {group_id = 1}, format}
 end
 
+local function create_default_collation_s2()
+    log.info("create predefined collation")
+    box.space._collation:replace{3, "unicode_s2", ADMIN, "ICU", "ru_RU", {strength='secondary'}}
+end
+
 local function upgrade_to_1_10_2()
     upgrade_priv_to_1_10_2()
     create_vinyl_deferred_delete_space()
+    create_default_collation_s2()
 end
 
 local function get_version()
