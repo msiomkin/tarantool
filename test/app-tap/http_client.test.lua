@@ -74,7 +74,7 @@ local function test_http_client(test, url, opts)
     test:ok(r.body:match("hello") ~= nil, "body")
     test:ok(tonumber(r.headers["content-length"]) > 0,
         "content-length > 0")
-    test:is(client.get("http://localhost:1/").status, 595, 'cannot connect')
+    if jit.os == "OSX" then test:skip('osx skip') else test:is(client.get("http://localhost:1/").status, 595, 'cannot connect') end
 
     local r = client.request('GET', url, nil, opts)
     test:is(r.status, 200, 'request')
@@ -204,8 +204,12 @@ local function test_errors(test)
     test:ok(not status and string.find(json.encode(err),
                         "Unsupported protocol"),
                         "POST: exception on bad protocol")
-    local r = http:get("http://do_not_exist_8ffad33e0cb01e6a01a03d00089e71e5b2b7e9930dfcba.ru")
-    test:is(r.status, 595, "GET: response on bad url")
+    if jit.os == "OSX" then
+        test:skip('osx skip')
+    else
+        local r = http:get("http://do_not_exist_8ffad33e0cb01e6a01a03d00089e71e5b2b7e9930dfcba.ru")
+        test:is(r.status, 595, "GET: response on bad url")
+    end
 end
 
 local function test_headers(test, url, opts)
