@@ -614,6 +614,10 @@ local function upgrade_to_2_1_0()
     upgrade_priv_to_2_1_0()
 end
 
+local function upgrade_to_2_1_2()
+    box.space._collation:replace{4, "unicode_ru_s2", ADMIN, "ICU", "ru_RU", {strength='secondary'}}
+end
+
 local function get_version()
     local version = box.space._schema:get{'version'}
     if version == nil then
@@ -641,7 +645,8 @@ local function upgrade(options)
         {version = mkversion(1, 7, 7), func = upgrade_to_1_7_7, auto = true},
         {version = mkversion(1, 10, 0), func = upgrade_to_1_10_0, auto = true},
         {version = mkversion(1, 10, 2), func = upgrade_to_1_10_2, auto = true},
-        {version = mkversion(2, 1, 0), func = upgrade_to_2_1_0, auto = true}
+        {version = mkversion(2, 1, 0), func = upgrade_to_2_1_0, auto = true},
+        {version = mkversion(2, 1, 2), func = upgrade_to_2_1_2, auto = true}
     }
 
     for _, handler in ipairs(handlers) do

@@ -350,7 +350,7 @@ box.space._collation:auto_increment{'test', 0, 'ICU', 42}
 ...
 box.space._collation:auto_increment{'test', 0, 'ICU', 'ru_RU', setmap{}} --ok
 ---
-- [4, 'test', 0, 'ICU', 'ru_RU', {}]
+- [5, 'test', 0, 'ICU', 'ru_RU', {}]
 ...
 box.space._collation:auto_increment{'test', 0, 'ICU', 'ru_RU', setmap{}}
 ---
@@ -358,7 +358,7 @@ box.space._collation:auto_increment{'test', 0, 'ICU', 'ru_RU', setmap{}}
 ...
 box.space._collation.index.name:delete{'test'} -- ok
 ---
-- [4, 'test', 0, 'ICU', 'ru_RU', {}]
+- [5, 'test', 0, 'ICU', 'ru_RU', {}]
 ...
 box.space._collation.index.name:delete{'nothing'} -- allowed
 ---
@@ -474,7 +474,7 @@ _ = box.space._collation.index.name:delete{'test'} -- ok
 ...
 box.space._collation:auto_increment{'test', 0, 'ICU', 'ru_RU', setmap{}}
 ---
-- [4, 'test', 0, 'ICU', 'ru_RU', {}]
+- [5, 'test', 0, 'ICU', 'ru_RU', {}]
 ...
 box.space._collation:select{}
 ---
@@ -482,7 +482,8 @@ box.space._collation:select{}
   - [1, 'unicode', 1, 'ICU', '', {}]
   - [2, 'unicode_ci', 1, 'ICU', '', {'strength': 'primary'}]
   - [3, 'binary', 1, 'BINARY', '', {}]
-  - [4, 'test', 0, 'ICU', 'ru_RU', {}]
+  - [4, 'unicode_ru_s2', 1, 'ICU', 'ru_RU', {'strength': 'secondary'}]
+  - [5, 'test', 0, 'ICU', 'ru_RU', {}]
 ...
 test_run:cmd('restart server default')
 box.space._collation:select{}
@@ -491,11 +492,12 @@ box.space._collation:select{}
   - [1, 'unicode', 1, 'ICU', '', {}]
   - [2, 'unicode_ci', 1, 'ICU', '', {'strength': 'primary'}]
   - [3, 'binary', 1, 'BINARY', '', {}]
-  - [4, 'test', 0, 'ICU', 'ru_RU', {}]
+  - [4, 'unicode_ru_s2', 1, 'ICU', 'ru_RU', {'strength': 'secondary'}]
+  - [5, 'test', 0, 'ICU', 'ru_RU', {}]
 ...
 box.space._collation.index.name:delete{'test'}
 ---
-- [4, 'test', 0, 'ICU', 'ru_RU', {}]
+- [5, 'test', 0, 'ICU', 'ru_RU', {}]
 ...
 --
 -- gh-3290: expose ICU into Lua. It uses built-in collations, that
