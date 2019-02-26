@@ -6,7 +6,8 @@ space = box.schema.space.create('tweedledum')
 index = space:create_index('primary')
 
 help()
-cfg_filter(box.cfg)
+box_cfg_module = require('cfg_filter')
+box_cfg_module.cfg_filter(box.cfg)
 space:insert{1, 'tuple'}
 box.snapshot()
 space:delete{1}

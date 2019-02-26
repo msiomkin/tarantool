@@ -24,7 +24,10 @@ help()
       \help show this screen
       \quit quit interactive console
 ...
-cfg_filter(box.cfg)
+box_cfg_module = require('cfg_filter')
+---
+...
+box_cfg_module.cfg_filter(box.cfg)
 ---
 - - - background
     - false
