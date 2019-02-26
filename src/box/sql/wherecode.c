@@ -1436,7 +1436,13 @@ sqlWhereCodeOneLoopStart(WhereInfo * pWInfo,	/* Complete information about the W
 					continue;
 				testcase(pWC->a[iTerm].wtFlags & TERM_ORINFO);
 				pExpr = sqlExprDup(db, pExpr, 0);
-				pAndExpr = sqlExprAnd(db, pAndExpr, pExpr);
+				if (pAndExpr != NULL || pExpr != NULL) {
+					pAndExpr =
+						sql_and_expr_new(db, pAndExpr,
+								 pExpr);
+					if (pAndExpr == NULL)
+						sql_parser_error(pParse);
+				}
 			}
 			if (pAndExpr) {
 				pAndExpr =
