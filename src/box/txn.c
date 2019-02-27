@@ -34,6 +34,7 @@
 #include "journal.h"
 #include <fiber.h>
 #include "xrow.h"
+#include "box.h"
 
 double too_long_threshold;
 
@@ -448,6 +449,11 @@ box_txn_commit()
 	*/
 	if (! txn)
 		return 0;
+	/*
+	 * Check that tarantool didn't switch to ro.
+	 */
+	if (box_check_writable() != 0)
+		return -1;
 	if (txn->in_sub_stmt) {
 		diag_set(ClientError, ER_COMMIT_IN_SUB_STMT);
 		return -1;

@@ -342,3 +342,11 @@ rows == expected_rows
 lsn == expected_lsn
 box.cfg{too_long_threshold = too_long_threshold}
 s:drop()
+
+-- Commit after read_only = true (gh-4016).
+s = box.schema.space.create('test')
+_ = s:create_index('pk')
+box.begin() s:replace({1}) box.cfg{read_only = true} box.commit()
+box.rollback()
+box.cfg{read_only = false}
+s:drop()

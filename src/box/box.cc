@@ -138,7 +138,7 @@ static struct fiber_pool tx_fiber_pool;
  */
 static struct cbus_endpoint tx_prio_endpoint;
 
-static int
+int
 box_check_writable(void)
 {
 	/* box is only writable if box.cfg.read_only == false and */
