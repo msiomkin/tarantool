@@ -955,18 +955,21 @@ error:
 
 }
 
-/*
+/**
  * Generate code to create a new space.
- * iSpaceId is a register storing the id of the space.
- * iCursor is a cursor to access _space.
+ *
+ * @param space_id_reg is a register storing the id of the space.
+ * @param table Table containing meta-information of space to be
+ *              created.
  */
 static void
-createSpace(Parse * pParse, int iSpaceId)
+vdbe_emit_space_create(struct Parse *pParse, int space_id_reg,
+		       struct Table *table)
 {
-	struct Table *table = pParse->pNewTable;
+	assert(table != NULL);
 	Vdbe *v = sqlite3GetVdbe(pParse);
 	int iFirstCol = ++pParse->nMem;
-	int iRecord = (pParse->nMem += 7);
+	int tuple_reg = (pParse->nMem += 7);
 	struct region *region = &pParse->region;
 	uint32_t table_opts_stmt_sz = 0;
 	char *table_opts_stmt = sql_encode_table_opts(region, table,
@@ -988,7 +991,7 @@ createSpace(Parse * pParse, int iSpaceId)
 	memcpy(raw, table_stmt, table_stmt_sz);
 	table_stmt = raw;
 
-	sqlite3VdbeAddOp2(v, OP_SCopy, iSpaceId, iFirstCol /* spaceId */ );
+	sqlite3VdbeAddOp2(v, OP_SCopy, space_id_reg, iFirstCol /* spaceId */ );
 	sqlite3VdbeAddOp2(v, OP_Integer, effective_user()->uid,
 			  iFirstCol + 1 /* owner */ );
 	sqlite3VdbeAddOp4(v, OP_String8, 0, iFirstCol + 2 /* name */ , 0,
@@ -1004,8 +1007,8 @@ createSpace(Parse * pParse, int iSpaceId)
 	/* zOpts and zFormat are co-located, hence STATIC */
 	sqlite3VdbeAddOp4(v, OP_Blob, table_stmt_sz, iFirstCol + 6,
 			  SQL_SUBTYPE_MSGPACK, table_stmt, P4_STATIC);
-	sqlite3VdbeAddOp3(v, OP_MakeRecord, iFirstCol, 7, iRecord);
-	sqlite3VdbeAddOp3(v, OP_SInsert, BOX_SPACE_ID, 0, iRecord);
+	sqlite3VdbeAddOp3(v, OP_MakeRecord, iFirstCol, 7, tuple_reg);
+	sqlite3VdbeAddOp3(v, OP_SInsert, BOX_SPACE_ID, 0, tuple_reg);
 	sqlite3VdbeChangeP5(v, OPFLAG_NCHANGE);
 	save_record(pParse, BOX_SPACE_ID, iFirstCol, 1, v->nOp - 1);
 	return;
@@ -1262,14 +1265,12 @@ sqlite3EndTable(Parse * pParse,	/* Parse context */
 		return;
 
 	assert(!db->init.busy);
+	assert(!p->def->opts.is_view);
 
-	if (!p->def->opts.is_view) {
-		if (sql_table_primary_key(p) == NULL) {
-			sqlite3ErrorMsg(pParse,
-					"PRIMARY KEY missing on table %s",
-					p->def->name);
-			goto cleanup;
-		}
+	if (sql_table_primary_key(p) == NULL) {
+		sqlite3ErrorMsg(pParse, "PRIMARY KEY missing on table %s",
+				p->def->name);
+		goto cleanup;
 	}
 
 	/*
@@ -1292,14 +1293,11 @@ sqlite3EndTable(Parse * pParse,	/* Parse context */
 	if (NEVER(v == 0))
 		return;
 	int reg_space_id = getNewSpaceId(pParse);
-	createSpace(pParse, reg_space_id);
-	/* Indexes aren't required for VIEW's.. */
-	if (!p->def->opts.is_view) {
-		for (uint32_t i = 0; i < p->space->index_count; ++i) {
-			struct index *idx = p->space->index[i];
-			vdbe_emit_create_index(pParse, p->def, idx->def,
-					       reg_space_id, idx->def->iid);
-		}
+	vdbe_emit_space_create(pParse, reg_space_id, p);
+	for (uint32_t i = 0; i < p->space->index_count; ++i) {
+		struct index *idx = p->space->index[i];
+		vdbe_emit_create_index(pParse, p->def, idx->def,
+				       reg_space_id, idx->def->iid);
 	}
 
 	/*
@@ -1428,9 +1426,7 @@ sql_create_view(struct Parse *parse_context, struct Token *begin,
 		parse_context->nErr++;
 		goto create_view_fail;
 	}
-
-	/* Use sqlite3EndTable() to add the view to the Tarantool.  */
-	sqlite3EndTable(parse_context, &end, 0);
+	vdbe_emit_space_create(parse_context, getNewSpaceId(parse_context), p);
 
  create_view_fail:
 	sqlite3DbFree(db, sel_tab);
