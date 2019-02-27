@@ -191,20 +191,10 @@ error:
 	return 0;
 }
 
-int
-xrow_header_encode(const struct xrow_header *header, uint64_t sync,
-		   struct iovec *out, size_t fixheader_len)
+static char *
+xrow_header_encode_to_buf(const struct xrow_header *header, uint64_t sync,
+			  char *data)
 {
-	/* allocate memory for sign + header */
-	out->iov_base = region_alloc(&fiber()->gc, XROW_HEADER_LEN_MAX +
-				     fixheader_len);
-	if (out->iov_base == NULL) {
-		diag_set(OutOfMemory, XROW_HEADER_LEN_MAX + fixheader_len,
-			 "gc arena", "xrow header encode");
-		return -1;
-	}
-	char *data = (char *) out->iov_base + fixheader_len;
-
 	/* Header */
 	char *d = data + 1; /* Skip 1 byte for MP_MAP */
 	int map_size = 0;
@@ -264,9 +254,27 @@ xrow_header_encode(const struct xrow_header *header, uint64_t sync,
 			map_size++;
 		}
 	}
-	assert(d <= data + XROW_HEADER_LEN_MAX);
 	mp_encode_map(data, map_size);
-	out->iov_len = d - (char *) out->iov_base;
+	return d;
+}
+
+int
+xrow_header_encode(const struct xrow_header *header, uint64_t sync,
+		   struct iovec *out, size_t fixheader_len)
+{
+	/* allocate memory for sign + header */
+	out->iov_base = region_alloc(&fiber()->gc, XROW_HEADER_LEN_MAX +
+				     fixheader_len);
+	if (out->iov_base == NULL) {
+		diag_set(OutOfMemory, XROW_HEADER_LEN_MAX + fixheader_len,
+			 "gc arena", "xrow header encode");
+		return -1;
+	}
+	char *data = (char *) out->iov_base + fixheader_len;
+	char *data_end = xrow_header_encode_to_buf(header, sync, data);
+	assert(data_end <= data + XROW_HEADER_LEN_MAX);
+
+	out->iov_len = data_end - (char *) out->iov_base;
 	out++;
 
 	memcpy(out, header->body, sizeof(*out) * header->bodycnt);

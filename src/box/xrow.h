@@ -76,7 +76,7 @@ struct xrow_header {
  * encoded into a binary packet.
  */
 static inline size_t
-xrow_approx_len(struct xrow_header *row)
+xrow_approx_len(const struct xrow_header *row)
 {
 	size_t len = XROW_HEADER_LEN_MAX;
 	for (int i = 0; i < row->bodycnt; i++)

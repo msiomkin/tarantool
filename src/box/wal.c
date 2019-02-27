@@ -43,6 +43,7 @@
 #include "cbus.h"
 #include "coio_task.h"
 #include "replication.h"
+#include "wal_mem.h"
 
 enum {
 	/**
@@ -154,6 +155,8 @@ struct wal_writer
 	 * Used for replication relays.
 	 */
 	struct rlist watchers;
+	/** Wal memory buffer. */
+	struct wal_mem wal_mem;
 };
 
 struct wal_msg {
@@ -898,6 +901,7 @@ wal_assign_lsn(struct vclock *vclock_diff, struct vclock *base,
 	int64_t txn_id = 0;
 	/** Assign LSN to all local rows. */
 	for ( ; row < end; row++) {
+		(*row)->tm = ev_now(loop());
 		if ((*row)->replica_id == 0) {
 			(*row)->lsn = vclock_inc(vclock_diff, instance_id) +
 				      vclock_get(base, instance_id);
@@ -983,12 +987,31 @@ wal_write_to_disk(struct cmsg *msg)
 	int rc;
 	struct journal_entry *entry;
 	struct stailq_entry *last_committed = NULL;
+	/* Cursor to track memory position. */
+	struct wal_mem_cursor mem_cursor;
+	wal_mem_cursor_create(&mem_cursor, &writer->wal_mem);
 	stailq_foreach_entry(entry, &wal_msg->commit, fifo) {
 		wal_assign_lsn(&vclock_diff, &writer->vclock,
 			       entry->rows, entry->rows + entry->n_rows);
 		entry->res = vclock_sum(&vclock_diff) +
 			     vclock_sum(&writer->vclock);
-		rc = xlog_write_entry(l, entry);
+		if (wal_mem_write(&writer->wal_mem, entry->rows,
+				  entry->rows + entry->n_rows) < 0)
+			goto done;
+		struct iovec iov[SMALL_OBUF_IOV_MAX];
+		int iovcnt;
+		xlog_tx_begin(l);
+		while ((iovcnt = wal_mem_cursor_forward(&mem_cursor,
+							&writer->wal_mem,
+							iov)) > 0) {
+			if (xlog_write_iov(l, iov, iovcnt, entry->n_rows) < 0) {
+				xlog_tx_rollback(l);
+				goto done;
+			}
+		}
+		if (iovcnt != 0)
+			goto done;
+		rc = xlog_tx_commit(l);
 		if (rc < 0)
 			goto done;
 		if (rc > 0) {
@@ -1069,6 +1092,7 @@ wal_writer_f(va_list ap)
 {
 	(void) ap;
 	struct wal_writer *writer = &wal_writer_singleton;
+	wal_mem_create(&writer->wal_mem);
 
 	/** Initialize eio in this thread */
 	coio_enable();
@@ -1108,6 +1132,7 @@ wal_writer_f(va_list ap)
 		xlog_close(&vy_log_writer.xlog, false);
 
 	cpipe_destroy(&writer->tx_prio_pipe);
+	wal_mem_destroy(&writer->wal_mem);
 	return 0;
 }
 

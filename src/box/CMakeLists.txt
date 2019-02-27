@@ -117,6 +117,7 @@ add_library(box STATIC
     journal.c
     sql.c
     execute.c
+    wal_mem.c
     wal.c
     call.c
     ${lua_sources}
