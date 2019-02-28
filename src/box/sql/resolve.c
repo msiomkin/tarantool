@@ -510,30 +510,6 @@ sqlCreateColumnExpr(sql * db, SrcList * pSrc, int iSrc, int iCol)
 }
 
 /*
- * Report an error that an expression is not valid for some set of
- * pNC->ncFlags values determined by validMask.
- */
-static void
-notValid(Parse * pParse,	/* Leave error message here */
-	 NameContext * pNC,	/* The name context */
-	 const char *zMsg,	/* Type of error */
-	 int validMask		/* Set of contexts for which prohibited */
-    )
-{
-	assert((validMask & ~(NC_IsCheck | NC_IdxExpr)) == 0);
-	if ((pNC->ncFlags & validMask) != 0) {
-		const char *zIn;
-		if (pNC->ncFlags & NC_IdxExpr)
-			zIn = "index expressions";
-		else if (pNC->ncFlags & NC_IsCheck)
-			zIn = "CHECK constraints";
-		else
-			unreachable();
-		sqlErrorMsg(pParse, "%s prohibited in %s", zMsg, zIn);
-	}
-}
-
-/*
  * Expression p should encode a floating point value between 1.0 and 0.0.
  * Return 1024 times this value.  Or return -1 if p is not a floating point
  * value between 1.0 and 0.0.
@@ -605,7 +581,10 @@ resolveExprStep(Walker * pWalker, Expr * pExpr)
 			Expr *pRight;
 
 			/* if( pSrcList==0 ) break; */
-			notValid(pParse, pNC, "the \".\" operator", NC_IdxExpr);
+			if (pNC->ncFlags & NC_IdxExpr) {
+				diag_set(ClientError, ER_INDEX_DEF, "'.' operator is");
+				pParse->is_aborted = true;
+			}
 			pRight = pExpr->pRight;
 			if (pRight->op == TK_ID) {
 				zTable = pExpr->pLeft->u.zToken;
@@ -695,9 +674,12 @@ resolveExprStep(Walker * pWalker, Expr * pExpr)
 					 * that might change over time cannot be used
 					 * in an index.
 					 */
-					notValid(pParse, pNC,
-						 "non-deterministic functions",
-						 NC_IdxExpr);
+					if (pNC->ncFlags & NC_IdxExpr) {
+						diag_set(ClientError, ER_INDEX_DEF,
+							 "Non-deterministic functions "\
+							 "are");
+						pParse->is_aborted = true;
+					}
 				}
 			}
 			if (is_agg && (pNC->ncFlags & NC_AllowAgg) == 0) {
@@ -759,8 +741,16 @@ resolveExprStep(Walker * pWalker, Expr * pExpr)
 			testcase(pExpr->op == TK_IN);
 			if (ExprHasProperty(pExpr, EP_xIsSelect)) {
 				int nRef = pNC->nRef;
-				notValid(pParse, pNC, "subqueries",
-					 NC_IsCheck | NC_IdxExpr);
+				if (pNC->ncFlags & NC_IdxExpr) {
+					diag_set(ClientError, ER_INDEX_DEF,
+						 "Subqueries are");
+					pParse->is_aborted = true;
+				} else if (pNC->ncFlags & NC_IsCheck) {
+					diag_set(ClientError,
+						 ER_CHECK_CONSTRAINT_DEF,
+						 "Subqueries are");
+					pParse->is_aborted = true;
+				}
 				sqlWalkSelect(pWalker, pExpr->x.pSelect);
 				assert(pNC->nRef >= nRef);
 				if (nRef != pNC->nRef) {
@@ -771,8 +761,12 @@ resolveExprStep(Walker * pWalker, Expr * pExpr)
 			break;
 		}
 	case TK_VARIABLE:{
-			notValid(pParse, pNC, "parameters",
-				 NC_IsCheck | NC_IdxExpr);
+			assert((pNC->ncFlags & NC_IsCheck) == 0);
+			if (pNC->ncFlags & NC_IdxExpr) {
+				diag_set(ClientError, ER_INDEX_DEF,
+					 "Parameter markers are");
+				pParse->is_aborted = true;
+			}
 			break;
 		}
 	case TK_BETWEEN:

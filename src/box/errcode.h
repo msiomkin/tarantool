@@ -244,6 +244,9 @@ struct errcode_record {
 	/*189 */_(ER_HEX_LITERAL_MAX,		"Hex literal %s%s length %d exceeds the supported limit (%d)") \
 	/*190 */_(ER_INT_LITERAL_MAX,		"Integer literal %s%s exceeds the supported range %lld - %lld") \
 	/*191 */_(ER_SQL_PARSER_LIMIT,		"%s%.*s %d exceeds the limit (%d)") \
+	/*192 */_(ER_INDEX_DEF,			"%s prohibited in an index definition") \
+	/*193 */_(ER_CHECK_CONSTRAINT_DEF,	"%s prohibited in a CHECK constraint definition") \
+	/*194 */_(ER_PRIMARY_KEY_DEF,		"Expressions are prohibited in a primary key definition") \
 
 /*
  * !IMPORTANT! Please follow instructions at start of the file

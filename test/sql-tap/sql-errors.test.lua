@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(25)
+test:plan(29)
 
 test:execsql([[
 	CREATE TABLE t0 (i INT PRIMARY KEY);
@@ -291,6 +291,46 @@ test:do_catchsql_test(
 		-- <sql-errors-1.25>
 		1,"Can't modify space 'V0': it is a view"
 		-- </sql-errors-1.25>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.26",
+	[[
+		CREATE TABLE t26 (i INT, PRIMARY KEY('i'));
+	]], {
+		-- <sql-errors-1.26>
+		1,"Expressions are prohibited in a primary key definition"
+		-- </sql-errors-1.26>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.27",
+	[[
+		CREATE TABLE t27 (i INT PRIMARY KEY, CHECK(i < (SELECT * FROM t0)));
+	]], {
+		-- <sql-errors-1.27>
+		1,"Failed to create space 'T27': Subqueries are prohibited in a CHECK constraint definition"
+		-- </sql-errors-1.27>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.28",
+	[[
+		CREATE INDEX i28 ON t0(t0.i);
+	]], {
+		-- <sql-errors-1.28>
+		1,"'.' operator is prohibited in an index definition"
+		-- </sql-errors-1.28>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.29",
+	[[
+		CREATE INDEX i29 ON t0($1);
+	]], {
+		-- <sql-errors-1.29>
+		1,"Parameter markers are prohibited in an index definition"
+		-- </sql-errors-1.29>
 	})
 
 test:finish_test()
