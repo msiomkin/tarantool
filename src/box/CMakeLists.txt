@@ -64,7 +64,7 @@ add_library(box STATIC
     index_def.c
     iterator_type.c
     memtx_hash.c
-    memtx_tree.c
+    memtx_tree.cc
     memtx_rtree.c
     memtx_bitset.c
     engine.c
