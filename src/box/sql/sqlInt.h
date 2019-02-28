@@ -1666,6 +1666,13 @@ struct FuncDestructor {
 #define SQL_FUNC_SLOCHNG  0x2000	/* "Slow Change". Value constant during a
 					 * single query - might change over time
 					 */
+#define SQL_FUNC_ARG_COLL 0x4000	/* The flag is set when the collation
+					 * of function arguments should be
+					 * determined, using rules in
+					 * collations_check_compatibility()
+					 * function. Applicable only if the
+					 * function has two arguments.
+					 */
 
 /*
  * The following three macros, FUNCTION(), LIKEFUNC() and AGGREGATE() are

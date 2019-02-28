@@ -38,6 +38,7 @@
 #include "vdbeInt.h"
 #include "version.h"
 #include "coll/coll.h"
+#include "tarantoolInt.h"
 #include <unicode/ustring.h>
 #include <unicode/ucasemap.h>
 #include <unicode/ucnv.h>
@@ -212,59 +213,173 @@ absFunc(sql_context * context, int argc, sql_value ** argv)
 }
 
 /*
- * Implementation of the instr() function.
+ * Returns name of SQL type, which is given by the int code.
  *
- * instr(haystack,needle) finds the first occurrence of needle
+ * @param sql_type One of enum sql_type codes.
+ * @retval string representing name of the given type.
+ */
+static inline char *
+sql_value_type_to_str(enum sql_type sql_type) {
+	switch(sql_type) {
+		case SQL_INTEGER:
+			return "INTEGER";
+		case SQL_TEXT:
+			return "TEXT";
+		case SQL_FLOAT:
+			return "REAL";
+		case SQL_BLOB:
+			return "BLOB";
+		default:
+			return "NULL";
+	}
+}
+
+/*
+ * Implementation of the position() function.
+ *
+ * position(haystack,needle) finds the first occurrence of needle
  * in haystack and returns the number of previous characters plus 1,
  * or 0 if needle does not occur within haystack.
  *
- * If both haystack and needle are BLOBs, then the result is one more than
- * the number of bytes in haystack prior to the first occurrence of needle,
- * or 0 if needle never occurs in haystack.
+ * Haystack and needle must both have the same type, either
+ * TEXT or BLOB.
+ *
+ * If haystack and needle are BLOBs, then the result is one more
+ * than the number of bytes in haystack prior to the first
+ * occurrence of needle, or 0 if needle never occurs in haystack.
+ *
+ * If haystack and needle are TEXTs, then their collations (if
+ * any) are taken into consideration. If only one param has a
+ * collation, then it is used. If both params have collations,
+ * then the right one is chosen by
+ * box/sql/sqlInt.h/collations_check_compatibility() function
+ * (If collations are not compatible then the error is raised).
+ *
+ * Note that the "collation-selection" logic is implemented in
+ * box/sql/expr.c/sqlExprCodeTarget() function.
  */
 static void
-instrFunc(sql_context * context, int argc, sql_value ** argv)
+positionFunc(sql_context *context, int argc, sql_value **argv)
 {
-	const unsigned char *zHaystack;
-	const unsigned char *zNeedle;
-	int nHaystack;
-	int nNeedle;
-	int typeHaystack, typeNeedle;
+	const unsigned char *haystack;
+	const unsigned char *needle;
+	int n_haystack_bytes;
+	int n_needle_bytes;
+	int type_haystack, type_needle;
 	int N = 1;
-	int isText;
 
 	UNUSED_PARAMETER(argc);
-	typeHaystack = sql_value_type(argv[0]);
-	typeNeedle = sql_value_type(argv[1]);
-	if (typeHaystack == SQL_NULL || typeNeedle == SQL_NULL)
+	type_haystack = sql_value_type(argv[1]);
+	type_needle = sql_value_type(argv[0]);
+	if (type_haystack == SQL_NULL || type_needle == SQL_NULL)
 		return;
-	nHaystack = sql_value_bytes(argv[0]);
-	nNeedle = sql_value_bytes(argv[1]);
-	if (nNeedle > 0) {
-		if (typeHaystack == SQL_BLOB && typeNeedle == SQL_BLOB) {
-			zHaystack = sql_value_blob(argv[0]);
-			zNeedle = sql_value_blob(argv[1]);
-			assert(zNeedle != 0);
-			assert(zHaystack != 0 || nHaystack == 0);
-			isText = 0;
-		} else {
-			zHaystack = sql_value_text(argv[0]);
-			zNeedle = sql_value_text(argv[1]);
-			isText = 1;
-			if (zHaystack == 0 || zNeedle == 0)
-				return;
-		}
-		while (nNeedle <= nHaystack
-		       && memcmp(zHaystack, zNeedle, nNeedle) != 0) {
-			N++;
-			do {
-				nHaystack--;
-				zHaystack++;
-			} while (isText && (zHaystack[0] & 0xc0) == 0x80);
-		}
-		if (nNeedle > nHaystack)
-			N = 0;
+	/*
+ 	 * Position function can be called only with string
+ 	 * or blob params.
+ 	 */
+	int inconsistent_type = 0;
+	if (type_needle != SQL_TEXT && type_needle != SQL_BLOB)
+		inconsistent_type = type_needle;
+	if (type_haystack != SQL_TEXT && type_haystack != SQL_BLOB)
+		inconsistent_type = type_haystack;
+	if (inconsistent_type > 0) {
+		diag_set(ClientError, ER_INCONSISTENT_TYPES, "TEXT or BLOB",
+			 sql_value_type_to_str(inconsistent_type));
+		context->pVdbe->pParse->rc = SQL_TARANTOOL_ERROR;
+		context->pVdbe->pParse->nErr++;
+		sql_result_error(context, tarantoolErrorMessage(), -1);
+		return;
 	}
+	/*
+	 * Both params of Position function must be of the same
+	 * type.
+	 */
+	if (type_haystack != type_needle) {
+		diag_set(ClientError, ER_INCONSISTENT_TYPES,
+			 sql_value_type_to_str(type_needle),
+			 sql_value_type_to_str(type_haystack));
+		context->pVdbe->pParse->rc = SQL_TARANTOOL_ERROR;
+		context->pVdbe->pParse->nErr++;
+		sql_result_error(context, tarantoolErrorMessage(), -1);
+		return;
+	}
+	n_haystack_bytes = sql_value_bytes(argv[1]);
+	n_needle_bytes = sql_value_bytes(argv[0]);
+	if (n_needle_bytes > 0) {
+		if (type_haystack == SQL_BLOB) {
+			haystack = sql_value_blob(argv[1]);
+			needle = sql_value_blob(argv[0]);
+			assert(needle != 0);
+			assert(haystack != 0 || n_haystack_bytes == 0);
+
+			while (n_needle_bytes <= n_haystack_bytes
+			       && memcmp(haystack, needle, n_needle_bytes) != 0) {
+				N++;
+				n_haystack_bytes--;
+				haystack++;
+			}
+			if (n_needle_bytes > n_haystack_bytes)
+				N = 0;
+		} else {
+			/*
+			 * Code below handles not only simple
+			 * cases like position('a', 'bca'), but
+			 * also more complex ones:
+			 * position('a', 'bcá' COLLATE "unicode_ci")
+			 * To do so, we need to use comparison
+			 * window, which has constant character
+			 * size, but variable byte size.
+			 * Character size is equal to
+			 * needle char size.
+			 */
+			haystack = sql_value_text(argv[1]);
+			needle = sql_value_text(argv[0]);
+			if (haystack == 0 || needle == 0)
+				return;
+			struct coll *coll = sqlGetFuncCollSeq(context);
+
+ 			int n_needle_chars =
+ 				sql_utf8_char_count(needle, n_needle_bytes);
+			int n_haystack_chars =
+				sql_utf8_char_count(haystack, n_haystack_bytes);
+
+			if (n_haystack_chars < n_needle_chars) {
+				N = 0;
+				goto finish;
+			}
+			/*
+			 * Comparison window is determined by
+			 * beg_offset and end_offset. beg_offset
+			 * is offset in bytes from haystack
+			 * beginning to window beginning.
+			 * end_offset is offset in bytes from
+			 * haystack beginning to window end.
+			 */
+			int end_offset = 0;
+			for (int c = 0; c < n_needle_chars; c++) {
+				SQL_UTF8_FWD_1(haystack, end_offset,
+					       n_haystack_bytes);
+			}
+			int beg_offset = 0;
+			int c;
+			for (c = 0; c + n_needle_chars <= n_haystack_chars; c++) {
+				if (coll->cmp((const char *) haystack + beg_offset,
+					      end_offset - beg_offset,
+					      (const char *) needle,
+					      n_needle_bytes, coll) == 0)
+					goto finish;
+				N++;
+				/* Update offsets. */
+				SQL_UTF8_FWD_1(haystack, beg_offset,
+					       n_haystack_bytes);
+				SQL_UTF8_FWD_1(haystack, end_offset,
+					       n_haystack_bytes);
+			}
+			/* Needle was not found in the haystack. */
+			N = 0;
+		}
+	}
+finish:
 	sql_result_int(context, N);
 }
 
@@ -1760,7 +1875,8 @@ sqlRegisterBuiltinFunctions(void)
 			  FIELD_TYPE_STRING),
 		FUNCTION2(length, 1, 0, 0, lengthFunc, SQL_FUNC_LENGTH,
 			  FIELD_TYPE_INTEGER),
-		FUNCTION(instr, 2, 0, 0, instrFunc, FIELD_TYPE_INTEGER),
+		FUNCTION2(position, 2, 0, 1, positionFunc, SQL_FUNC_ARG_COLL,
+			  FIELD_TYPE_INTEGER),
 		FUNCTION(printf, -1, 0, 0, printfFunc, FIELD_TYPE_STRING),
 		FUNCTION(unicode, 1, 0, 0, unicodeFunc, FIELD_TYPE_STRING),
 		FUNCTION(char, -1, 0, 0, charFunc, FIELD_TYPE_STRING),

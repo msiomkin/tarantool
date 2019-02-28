@@ -4054,7 +4054,8 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 					constMask |= MASKBIT32(i);
 				}
 				if ((pDef->funcFlags & SQL_FUNC_NEEDCOLL) !=
-				    0 && coll == NULL) {
+				    0 && coll == NULL &&
+				    !(pDef->funcFlags & SQL_FUNC_ARG_COLL)) {
 					bool unused;
 					uint32_t id;
 					if (sql_expr_coll(pParse,
@@ -4063,6 +4064,37 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 							  &coll) != 0)
 						return 0;
 				}
+			}
+			if (pDef->funcFlags & SQL_FUNC_ARG_COLL) {
+				assert(nFarg == 2);
+				struct coll *colls[2] = {NULL};
+				uint32_t colls_ids[2] = {0};
+				bool is_forced[2] = {false};
+				if (sql_expr_coll(pParse, pFarg->a[0].pExpr,
+						  &is_forced[0], &colls_ids[0],
+						  &colls[0]) != 0)
+					return 0;
+				if (sql_expr_coll(pParse, pFarg->a[1].pExpr,
+						  &is_forced[1], &colls_ids[1],
+						  &colls[1]) != 0)
+					return 0;
+
+				uint32_t coll_id;
+				if (collations_check_compatibility(colls_ids[0],
+								   is_forced[0],
+								   colls_ids[1],
+								   is_forced[1],
+								   &coll_id)
+								   != 0) {
+					pParse->rc = SQL_TARANTOOL_ERROR;
+					pParse->nErr++;
+					return 0;
+				}
+
+				coll = (coll_id == colls_ids[0]) ? colls[0] :
+								   colls[1];
+				if (coll == NULL)
+					coll = coll_by_id(COLL_NONE)->coll;
 			}
 			if (pFarg) {
 				if (constMask) {
