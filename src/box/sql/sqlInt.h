@@ -4860,7 +4860,7 @@ vdbe_emit_halt_with_presence_test(struct Parse *parser, int space_id,
  * @param table_name Table name.
  */
 void
-vdbe_emit_stat_space_clear(struct Parse *parse, const char *stat_table_name,
-			   const char *idx_name, const char *table_name);
+vdbe_emit_stat_space_clear(struct Parse *parse, uint32_t space_id,
+			   uint32_t index_id);
 
 #endif				/* sqlINT_H */
