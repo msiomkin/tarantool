@@ -107,6 +107,7 @@ enum {
 	/** Space id of _space_sequence. */
 	BOX_SPACE_SEQUENCE_ID = 340,
 	/** Space ids for SQL statictics. */
+	BOX_SQL_STAT_ID = 347,
 	BOX_SQL_STAT1_ID = 348,
 	BOX_SQL_STAT4_ID = 349,
 	/** Space id of _fk_constraint. */

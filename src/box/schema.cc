@@ -444,6 +444,13 @@ schema_init()
 	sc_space_new(BOX_INDEX_ID, "_index", key_parts, 2,
 		     &alter_space_on_replace_index, &on_stmt_begin_index);
 
+	/* _sql_stat - a statistics on space, seen in SQL. */
+	key_parts[0].fieldno = 0; /* space id */
+	key_parts[0].type = FIELD_TYPE_UNSIGNED;
+	key_parts[1].fieldno = 1; /* index id */
+	key_parts[1].type = FIELD_TYPE_UNSIGNED;
+	sc_space_new(BOX_SQL_STAT_ID, "_sql_stat", key_parts, 2, NULL, NULL);
+
 	/* _sql_stat1 - a simpler statistics on space, seen in SQL. */
 	key_parts[0].fieldno = 0; /* space name */
 	key_parts[0].type = FIELD_TYPE_STRING;
