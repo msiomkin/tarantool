@@ -765,31 +765,35 @@ callStatGet(Vdbe * v, int regStat4, int iParam, int regOut)
 static void
 vdbe_emit_analyze_space(struct Parse *parse, struct space *space)
 {
-	assert(space != NULL);
-	struct space *stat1 = space_by_id(BOX_SQL_STAT1_ID);
-	assert(stat1 != NULL);
-	struct space *stat4 = space_by_id(BOX_SQL_STAT4_ID);
-	assert(stat4 != NULL);
-
-	/* Register to hold Stat4Accum object. */
-	int stat4_reg = ++parse->nMem;
-	/* Index of changed index field. */
-	int chng_reg = ++parse->nMem;
-	/* Key argument passed to stat_push(). */
-	int key_reg = ++parse->nMem;
-	/* Temporary use register. */
-	int tmp_reg = ++parse->nMem;
-	/* Register containing table name. */
-	int tab_name_reg = ++parse->nMem;
-	/* Register containing index name. */
-	int idx_name_reg = ++parse->nMem;
-	/* Value for the stat column of _sql_stat1. */
-	int stat1_reg = ++parse->nMem;
-	/* MUST BE LAST (see below). */
-	int prev_reg = ++parse->nMem;
 	/* Do not gather statistics on system tables. */
 	if (space_is_system(space))
 		return;
+	assert(space != NULL);
+	struct space *stat = space_by_id(BOX_SQL_STAT_ID);
+	assert(stat != NULL);
+
+	int space_id_reg = ++parse->nMem;
+	int index_id_reg = ++parse->nMem;
+	int stat_reg = ++parse->nMem;
+	int neq_reg = ++parse->nMem;
+	int nlt_reg = ++parse->nMem;
+	int ndlt_reg = ++parse->nMem;
+	int sample_reg = ++parse->nMem;
+
+	int stat_accum_reg = ++parse->nMem;
+	int changed_field_reg = ++parse->nMem;
+	int key_reg = ++parse->nMem;
+	int tmp_reg = ++parse->nMem;
+	int neq_array_reg = ++parse->nMem;
+	parse->nMem += SQL_STAT4_SAMPLES;
+	int nlt_array_reg = parse->nMem;
+	parse->nMem += SQL_STAT4_SAMPLES;
+	int ndlt_array_reg = parse->nMem;
+	parse->nMem += SQL_STAT4_SAMPLES;
+	int sample_array_reg = parse->nMem;
+	parse->nMem += SQL_STAT4_SAMPLES;
+	int prev_reg = parse->nMem;
+
 	/*
 	 * Open a read-only cursor on the table. Also allocate
 	 * a cursor number to use for scanning indexes.
@@ -797,60 +801,21 @@ vdbe_emit_analyze_space(struct Parse *parse, struct space *space)
 	int tab_cursor = parse->nTab;
 	parse->nTab += 2;
 	assert(space->index_count != 0);
-	struct Vdbe *v = sqlGetVdbe(parse);
-	assert(v != NULL);
-	const char *tab_name = space_name(space);
-	sqlVdbeAddOp4(v, OP_IteratorOpen, tab_cursor, 0, 0, (void *) space,
-			  P4_SPACEPTR);
-	sqlVdbeLoadString(v, tab_name_reg, space->def->name);
+	struct index *pk = space_index(space, 0);
+	int pk_part_count = pk->def->key_def->part_count;
+	struct Vdbe *vdbe = sqlGetVdbe(parse);
+	assert(vdbe != NULL);
+	sqlVdbeAddOp4(vdbe, OP_IteratorOpen, tab_cursor, 0, 0, (void *) space,
+		      P4_SPACEPTR);
+	sqlVdbeAddOp2(vdbe, OP_Integer, space->def->id, space_id_reg);
 	for (uint32_t j = 0; j < space->index_count; ++j) {
 		struct index *idx = space->index[j];
-		const char *idx_name;
-		/*
-		 * Primary indexes feature automatically generated
-		 * names. Thus, for the sake of clarity, use
-		 * instead more familiar table name.
-		 */
-		if (idx->def->iid == 0)
-			idx_name = tab_name;
-		else
-			idx_name = idx->def->name;
-		int part_count = idx->def->key_def->part_count;
-		/* Populate the register containing the index name. */
-		sqlVdbeLoadString(v, idx_name_reg, idx_name);
-		VdbeComment((v, "Analysis for %s.%s", tab_name, idx_name));
-		/*
-		 * Pseudo-code for loop that calls stat_push():
-		 *
-		 *   Rewind csr
-		 *   if eof(csr) goto end_of_scan;
-		 *   chng_reg = 0
-		 *   goto chng_addr_0;
-		 *
-		 *  next_row:
-		 *   chng_reg = 0
-		 *   if( idx(0) != prev_reg(0) ) goto chng_addr_0
-		 *   chng_reg = 1
-		 *   if( idx(1) != prev_reg(1) ) goto chng_addr_1
-		 *   ...
-		 *   chng_reg = N
-		 *   goto chng_addr_N
-		 *
-		 *  chng_addr_0:
-		 *   prev_reg(0) = idx(0)
-		 *  chng_addr_1:
-		 *   prev_reg(1) = idx(1)
-		 *  ...
-		 *
-		 *  distinct_addr:
-		 *   key_reg = idx(key)
-		 *   stat_push(P, chng_reg, key_reg)
-		 *   Next csr
-		 *   if !eof(csr) goto next_row;
-		 *
-		 *  end_of_scan:
-		 */
+		sqlVdbeAddOp2(vdbe, OP_Integer, idx->def->iid,
+				  index_id_reg);
+		VdbeComment((vdbe, "Analysis for %s.%s", space_name(space),
+			    idx->def->name));
 
+		int part_count = idx->def->key_def->part_count;
 		/*
 		 * Make sure there are enough memory cells
 		 * allocated to accommodate the prev_reg array
@@ -858,15 +823,16 @@ vdbe_emit_analyze_space(struct Parse *parse, struct space *space)
 		 * when building a record to insert into
 		 * the sample column of the _sql_stat4 table).
 		 */
-		parse->nMem = MAX(parse->nMem, prev_reg + part_count);
+		parse->nMem = MAX(parse->nMem, prev_reg + part_count +
+				  pk_part_count);
 		/* Open a cursor on the index being analyzed. */
 		int idx_cursor;
 		if (j != 0) {
 			idx_cursor = parse->nTab - 1;
-			sqlVdbeAddOp4(v, OP_IteratorOpen, idx_cursor,
-					  idx->def->iid, 0,
-					  (void *) space, P4_SPACEPTR);
-			VdbeComment((v, "%s", idx->def->name));
+			sqlVdbeAddOp4(vdbe, OP_IteratorOpen, idx_cursor,
+				      idx->def->iid, 0, (void *) space,
+				      P4_SPACEPTR);
+			VdbeComment((vdbe, "%s", idx->def->name));
 		} else {
 			/* We have already opened cursor on PK. */
 			idx_cursor = tab_cursor;
@@ -884,161 +850,137 @@ vdbe_emit_analyze_space(struct Parse *parse, struct space *space)
 		 *
 		 * The third argument is only used for STAT4
 		 */
-		sqlVdbeAddOp2(v, OP_Count, idx_cursor, stat4_reg + 3);
-		sqlVdbeAddOp2(v, OP_Integer, part_count, stat4_reg + 1);
-		sqlVdbeAddOp2(v, OP_Integer, part_count, stat4_reg + 2);
-		sqlVdbeAddOp4(v, OP_Function0, 0, stat4_reg + 1, stat4_reg,
-				  (char *)&statInitFuncdef, P4_FUNCDEF);
-		sqlVdbeChangeP5(v, 3);
-		/*
-		 * Implementation of the following:
-		 *
-		 *   Rewind csr
-		 *   if eof(csr) goto end_of_scan;
-		 *   chng_reg = 0
-		 *   goto next_push_0;
-		 */
-		int rewind_addr = sqlVdbeAddOp1(v, OP_Rewind, idx_cursor);
-		sqlVdbeAddOp2(v, OP_Integer, 0, chng_reg);
-		int distinct_addr = sqlVdbeMakeLabel(v);
+		sqlVdbeAddOp2(vdbe, OP_Count, idx_cursor, stat_accum_reg + 3);
+		sqlVdbeAddOp2(vdbe, OP_Integer, part_count, stat_accum_reg + 1);
+		sqlVdbeAddOp2(vdbe, OP_Integer, part_count, stat_accum_reg + 2);
+		sqlVdbeAddOp4(vdbe, OP_Function0, 0, stat_accum_reg + 1,
+			      stat_accum_reg, (char *)&statInitFuncdef,
+			      P4_FUNCDEF);
+		sqlVdbeChangeP5(vdbe, 3);
+		int rewind_addr = sqlVdbeAddOp1(vdbe, OP_Rewind, idx_cursor);
+
+
+		sqlVdbeAddOp2(vdbe, OP_Integer, 0, changed_field_reg);
+		int distinct_addr = sqlVdbeMakeLabel(vdbe);
 		/* Array of jump instruction addresses. */
 		int *jump_addrs = region_alloc(&parse->region,
 					       sizeof(int) * part_count);
 		if (jump_addrs == NULL) {
 			diag_set(OutOfMemory, sizeof(int) * part_count,
-				 "region", "jump_addrs");
+				 "region_alloc", "jump_addrs");
 			parse->rc = SQL_TARANTOOL_ERROR;
 			parse->nErr++;
 			return;
 		}
+
+		sqlVdbeAddOp0(vdbe, OP_Goto);
+		int next_row_addr = sqlVdbeCurrentAddr(vdbe);
+
 		/*
-		 *  next_row:
-		 *   chng_reg = 0
-		 *   if( idx(0) != prev_reg(0) ) goto chng_addr_0
-		 *   chng_reg = 1
-		 *   if( idx(1) != prev_reg(1) ) goto chng_addr_1
-		 *   ...
-		 *   chng_reg = N
-		 *   goto distinct_addr
+		 * For a single-column UNIQUE index, once we have found a
+		 * non-NULL row, we know that all the rest will be
+		 * distinct, so skip subsequent distinctness tests.
 		 */
-		sqlVdbeAddOp0(v, OP_Goto);
-		int next_row_addr = sqlVdbeCurrentAddr(v);
 		if (part_count == 1 && idx->def->opts.is_unique) {
-			/*
-			 * For a single-column UNIQUE index, once
-			 * we have found a non-NULL row, we know
-			 * that all the rest will be distinct, so
-			 * skip subsequent distinctness tests.
-			 */
-			sqlVdbeAddOp2(v, OP_NotNull, prev_reg,
-					  distinct_addr);
+			sqlVdbeAddOp2(vdbe, OP_NotNull, prev_reg,
+				      distinct_addr);
 		}
+
 		struct key_part *part = idx->def->key_def->parts;
 		for (int i = 0; i < part_count; ++i, ++part) {
 			struct coll *coll = part->coll;
-			sqlVdbeAddOp2(v, OP_Integer, i, chng_reg);
-			sqlVdbeAddOp3(v, OP_Column, idx_cursor,
-					  part->fieldno, tmp_reg);
-			jump_addrs[i] = sqlVdbeAddOp4(v, OP_Ne, tmp_reg, 0,
-							 prev_reg + i,
-							 (char *)coll,
-							 P4_COLLSEQ);
-			sqlVdbeChangeP5(v, SQL_NULLEQ);
+			sqlVdbeAddOp2(vdbe, OP_Integer, i, changed_field_reg);
+			sqlVdbeAddOp3(vdbe, OP_Column, idx_cursor,
+				      part->fieldno, tmp_reg);
+			jump_addrs[i] = sqlVdbeAddOp4(vdbe, OP_Ne, tmp_reg, 0,
+						      prev_reg + i,
+						      (char *)coll, P4_COLLSEQ);
+			sqlVdbeChangeP5(vdbe, SQL_NULLEQ);
 		}
-		sqlVdbeAddOp2(v, OP_Integer, part_count, chng_reg);
-		sqlVdbeGoto(v, distinct_addr);
-		/*
-		 *  chng_addr_0:
-		 *   prev_reg(0) = idx(0)
-		 *  chng_addr_1:
-		 *   prev_reg(1) = idx(1)
-		 *  ...
-		 */
-		sqlVdbeJumpHere(v, next_row_addr - 1);
+		sqlVdbeAddOp2(vdbe, OP_Integer, part_count, changed_field_reg);
+		sqlVdbeGoto(vdbe, distinct_addr);
+
+		sqlVdbeJumpHere(vdbe, next_row_addr - 1);
 		part = idx->def->key_def->parts;
 		for (int i = 0; i < part_count; ++i, ++part) {
-			sqlVdbeJumpHere(v, jump_addrs[i]);
-			sqlVdbeAddOp3(v, OP_Column, idx_cursor,
-					  part->fieldno, prev_reg + i);
+			sqlVdbeJumpHere(vdbe, jump_addrs[i]);
+			sqlVdbeAddOp3(vdbe, OP_Column, idx_cursor,
+				      part->fieldno, prev_reg + i);
 		}
-		sqlVdbeResolveLabel(v, distinct_addr);
-		/*
-		 *  chng_addr_N:
-		 *   key_reg = idx(key)
-		 *   stat_push(P, chng_reg, key_reg)
-		 *   Next csr
-		 *   if !eof(csr) goto next_row;
-		 */
-		assert(key_reg == (stat4_reg + 2));
-		struct index *pk = space_index(space, 0);
-		int pk_part_count = pk->def->key_def->part_count;
-		/* Allocate memory for array. */
-		parse->nMem = MAX(parse->nMem,
-				  prev_reg + part_count + pk_part_count);
+		sqlVdbeResolveLabel(vdbe, distinct_addr);
+
 		int stat_key_reg = prev_reg + part_count;
 		for (int i = 0; i < pk_part_count; i++) {
 			uint32_t k = pk->def->key_def->parts[i].fieldno;
 			assert(k < space->def->field_count);
-			sqlVdbeAddOp3(v, OP_Column, idx_cursor, k,
-					  stat_key_reg + i);
-			VdbeComment((v, "%s", space->def->fields[k].name));
+			sqlVdbeAddOp3(vdbe, OP_Column, idx_cursor, k,
+				      stat_key_reg + i);
+			VdbeComment((vdbe, "%s", space->def->fields[k].name));
 		}
-		sqlVdbeAddOp3(v, OP_MakeRecord, stat_key_reg,
-				  pk_part_count, key_reg);
-		assert(chng_reg == (stat4_reg + 1));
-		sqlVdbeAddOp4(v, OP_Function0, 1, stat4_reg, tmp_reg,
-				  (char *)&statPushFuncdef, P4_FUNCDEF);
-		sqlVdbeChangeP5(v, 3);
-		sqlVdbeAddOp2(v, OP_Next, idx_cursor, next_row_addr);
-		/* Add the entry to the stat1 table. */
-		callStatGet(v, stat4_reg, STAT_GET_STAT1, stat1_reg);
-		enum field_type types[4] = { FIELD_TYPE_STRING,
-					     FIELD_TYPE_STRING,
-					     FIELD_TYPE_STRING,
-					     field_type_MAX };
-		sqlVdbeAddOp4(v, OP_MakeRecord, tab_name_reg, 4, tmp_reg,
-				  (char *)types, sizeof(types));
-		sqlVdbeAddOp4(v, OP_IdxInsert, tmp_reg, 0, 0,
-				  (char *)stat1, P4_SPACEPTR);
-		/* Add the entries to the stat4 table. */
-		int eq_reg = stat1_reg;
-		int lt_reg = stat1_reg + 1;
-		int dlt_reg = stat1_reg + 2;
-		int sample_reg = stat1_reg + 3;
-		int col_reg = stat1_reg + 4;
-		int sample_key_reg = col_reg + part_count;
-		parse->nMem = MAX(parse->nMem, col_reg + part_count);
-		int next_addr = sqlVdbeCurrentAddr(v);
-		callStatGet(v, stat4_reg, STAT_GET_KEY, sample_key_reg);
-		int is_null_addr = sqlVdbeAddOp1(v, OP_IsNull,
-						     sample_key_reg);
-		callStatGet(v, stat4_reg, STAT_GET_NEQ, eq_reg);
-		callStatGet(v, stat4_reg, STAT_GET_NLT, lt_reg);
-		callStatGet(v, stat4_reg, STAT_GET_NDLT, dlt_reg);
-		sqlVdbeAddOp4Int(v, OP_NotFound, tab_cursor, next_addr,
-				     sample_key_reg, 0);
-		/*
-		 * We know that the sample_key_reg row exists
-		 * because it was read by the previous loop.
-		 * Thus the not-found jump of seekOp will never
-		 * be taken.
-		 */
-		for (int i = 0; i < part_count; i++) {
-			uint32_t tabl_col = idx->def->key_def->parts[i].fieldno;
-			sqlExprCodeGetColumnOfTable(v, space->def,
-							tab_cursor, tabl_col,
-							col_reg + i);
+		sqlVdbeAddOp3(vdbe, OP_MakeRecord, stat_key_reg, pk_part_count,
+			      key_reg);
+		sqlVdbeAddOp4(vdbe, OP_Function0, 1, stat_accum_reg, tmp_reg,
+			      (char *)&statPushFuncdef, P4_FUNCDEF);
+		sqlVdbeChangeP5(vdbe, 3);
+		sqlVdbeAddOp2(vdbe, OP_Next, idx_cursor, next_row_addr);
+
+
+		int sample_key_reg = prev_reg + part_count;
+		callStatGet(vdbe, stat_accum_reg, STAT_GET_STAT1, stat_reg);
+		sqlVdbeAddOp2(vdbe, OP_Integer, 0, tmp_reg);
+		int is_null_addr = sqlVdbeMakeLabel(vdbe);
+		for (int i = 0; i < SQL_STAT4_SAMPLES; ++i) {
+			int next_addr = sqlVdbeCurrentAddr(vdbe);
+			callStatGet(vdbe, stat_accum_reg, STAT_GET_KEY,
+				    sample_key_reg);
+			sqlVdbeAddOp2(vdbe, OP_IsNull, sample_key_reg,
+				      is_null_addr);
+			callStatGet(vdbe, stat_accum_reg, STAT_GET_NEQ,
+				    neq_array_reg + i);
+			callStatGet(vdbe, stat_accum_reg, STAT_GET_NLT,
+				    nlt_array_reg + i);
+			callStatGet(vdbe, stat_accum_reg, STAT_GET_NDLT,
+				    ndlt_array_reg + i);
+			sqlVdbeAddOp4Int(vdbe, OP_NotFound, tab_cursor,
+					 next_addr, sample_key_reg, 0);
+			/*
+			 * We know that the sample_key_reg row exists
+			 * because it was read by the previous loop.
+			 * Thus the not-found jump of seekOp will never
+			 * be taken.
+			 */
+			for (int i = 0; i < part_count; i++) {
+				uint32_t tabl_col =
+					idx->def->key_def->parts[i].fieldno;
+				sqlExprCodeGetColumnOfTable(vdbe, space->def,
+							    tab_cursor,
+							    tabl_col,
+							    prev_reg + i);
+			}
+			sqlVdbeAddOp3(vdbe, OP_MakeRecord, prev_reg, part_count,
+					  sample_array_reg + i);
+			sqlVdbeChangeP5(vdbe, OPFLAG_MAKE_ARRAY);
+			sqlVdbeAddOp2(vdbe, OP_Integer, i + 1, tmp_reg);
 		}
-		sqlVdbeAddOp3(v, OP_MakeRecord, col_reg, part_count,
-				  sample_reg);
-		sqlVdbeAddOp3(v, OP_MakeRecord, tab_name_reg, 6, tmp_reg);
-		sqlVdbeAddOp4(v, OP_IdxReplace, tmp_reg, 0, 0,
-				  (char *)stat4, P4_SPACEPTR);
-		/* P1==1 for end-of-loop. */
-		sqlVdbeAddOp2(v, OP_Goto, 1, next_addr);
-		sqlVdbeJumpHere(v, is_null_addr);
-		/* End of analysis. */
-		sqlVdbeJumpHere(v, rewind_addr);
+
+		sqlVdbeResolveLabel(vdbe, is_null_addr);
+		sqlVdbeAddOp3(vdbe, OP_MakeRecord, neq_array_reg, tmp_reg,
+			      neq_reg);
+		sqlVdbeChangeP5(vdbe, OPFLAG_P2_IS_REG | OPFLAG_MAKE_ARRAY);
+		sqlVdbeAddOp3(vdbe, OP_MakeRecord, nlt_array_reg, tmp_reg,
+			      nlt_reg);
+		sqlVdbeChangeP5(vdbe, OPFLAG_P2_IS_REG | OPFLAG_MAKE_ARRAY);
+		sqlVdbeAddOp3(vdbe, OP_MakeRecord, ndlt_array_reg, tmp_reg,
+			      ndlt_reg);
+		sqlVdbeChangeP5(vdbe, OPFLAG_P2_IS_REG | OPFLAG_MAKE_ARRAY);
+		sqlVdbeAddOp3(vdbe, OP_MakeRecord, sample_array_reg, tmp_reg,
+			      sample_reg);
+		sqlVdbeChangeP5(vdbe, OPFLAG_P2_IS_REG | OPFLAG_MAKE_ARRAY);
+		sqlVdbeAddOp3(vdbe, OP_MakeRecord, space_id_reg, 7, tmp_reg);
+
+		sqlVdbeAddOp4(vdbe, OP_IdxReplace, tmp_reg, 0, 0,
+			      (char *)stat, P4_SPACEPTR);
+		sqlVdbeJumpHere(vdbe, rewind_addr);
 	}
 }
 
@@ -1683,6 +1625,7 @@ stat_copy(struct index_stat *dest, const struct index_stat *src)
 int
 sql_analysis_load(struct sql *db)
 {
+	return SQL_OK;
 	ssize_t index_count = box_index_len(BOX_SQL_STAT1_ID, 0);
 	if (index_count < 0)
 		return SQL_TARANTOOL_ERROR;
