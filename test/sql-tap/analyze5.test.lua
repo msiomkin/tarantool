@@ -21,6 +21,8 @@ json = require("json")
 -- with many repeated values and only a few distinct values.
 --
 
+test.create_stat_view()
+
 testprefix = "analyze5"
 local function eqp(sql)
     return test:execsql("EXPLAIN QUERY PLAN"..sql)
@@ -115,13 +117,12 @@ test:do_test(
 
         -- DISTINCT idx, sample -- lindex(test_decode(sample),0)
         -- WHERE idx='t1u' ORDER BY nlt;
-        return test:execsql([[ SELECT DISTINCT msgpack_decode("sample")
-                                 FROM "_sql_stat4"
-                                 WHERE "idx"='T1U'
-                                 ORDER BY "nlt"]])
+        return test:execsql([[
+            SELECT sample FROM stat_view where idx = 'T1U' ORDER BY nlt
+        ]])
     end, {
         -- <analyze5-1.0>
-        "alpha", "bravo", "charlie", "delta"
+        "alpha","alpha","alpha","bravo","bravo","bravo","charlie","delta"
         -- </analyze5-1.0>
     })
 
@@ -141,13 +142,19 @@ test:do_test(
 --         -- </analyze5-1.1>
 --     })
 
-test:do_test(
-    "analyze5-1.2",
-    function()
-        return test:execsql([[SELECT "idx", count(*) FROM "_sql_stat4" GROUP BY 1 ORDER BY 1]])
-    end, {
+test:do_execsql_test(
+    "analyze5-1.2", [[
+        SELECT idx, sample FROM stat_view;
+    ]], {
         -- <analyze5-1.2>
-        "T1",24,"T1T",4,"T1U",4,"T1V",1,"T1W",4,"T1X",4,"T1Y",2,"T1Z",4
+        "pk_unnamed_T1_1",112,224,276,336,410,448,499,525,529,530,560,593,594,623,672,701,772,784,798,890,896,925,926,969,
+        "T1T","0.5","0.5","0.5","1.5","1.5","1.5","2.5","3.5",
+        "T1U","alpha","alpha","alpha","bravo","bravo","bravo","charlie","delta",
+        "T1V","NULL","NULL","NULL","NULL","NULL","NULL","NULL","NULL",
+        "T1W","0","0","0","1","1","1","2","NULL",
+        "T1X","1","1","2","2","3","NULL","NULL","NULL",
+        "T1Y","0","0","0","0","0","0","0","0","1",
+        "T1Z",0,0,0,1,1,1,2,3
         -- </analyze5-1.2>
     })
 

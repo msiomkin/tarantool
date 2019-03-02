@@ -24,6 +24,8 @@ test:plan(4)
 -- ["set","testdir",[["file","dirname",["argv0"]]]]
 -- ["source",[["testdir"],"\/tester.tcl"]]
 
+test.create_stat_view()
+
 test:do_test(
     "analyze4-1.0",
     function()
@@ -54,10 +56,10 @@ test:do_test(
 --
 test:do_execsql_test(
     "analyze4-1.1",
-    [[ SELECT "idx", "stat" FROM "_sql_stat1" WHERE "tbl"='T1' ORDER BY "idx"; ]],
+    [[ SELECT idx, stat FROM stat_view WHERE tbl='T1' ORDER BY idx; ]],
     {
         -- <analyze4-1.1>
-        "T1","128 1", "T1A", "128 1", "T1B", "128 128"
+        "T1A", "128 1", "T1B", "128 128", "pk_unnamed_T1_1","128 1"
         -- </analyze4-1.1>
     })
 
@@ -73,11 +75,11 @@ test:do_test(
 -- pragma vdbe_debug=1;
             ANALYZE;
 -- pragma vdbe_debug=0;
-            SELECT "idx", "stat" FROM "_sql_stat1" WHERE "tbl"='T1' ORDER BY "idx";
+            SELECT idx, stat FROM stat_view WHERE tbl='T1' ORDER BY idx;
         ]])
     end, {
         -- <analyze4-1.2>
-        "T1", "128 1", "T1A", "128 1", "T1B", "128 64"
+        "T1A", "128 1", "T1B", "128 64", "pk_unnamed_T1_1","128 1"
         -- </analyze4-1.2>
     })
 
@@ -111,11 +113,11 @@ test:do_execsql_test(
             CREATE INDEX t1cdb ON t1(c,d,b);
             CREATE INDEX t1cbd ON t1(c,b,d);
             ANALYZE;
-            SELECT "idx", "stat" FROM "_sql_stat1" WHERE "tbl"='T1' ORDER BY "idx";
+            SELECT idx, stat FROM stat_view WHERE tbl='T1' ORDER BY idx;
     ]]
     , {
         -- <analyze4-1.3>
-        "T1","128 1", "T1A", "128 1", "T1B", "128 128", "T1BCD", "128 128 4 2", "T1CBD", "128 4 4 2", "T1CDB", "128 4 2 2"
+        "T1A", "128 1", "T1B", "128 128", "T1BCD", "128 128 4 2", "T1CBD", "128 4 4 2", "T1CDB", "128 4 2 2", "pk_unnamed_T1_1","128 1"
         -- </analyze4-1.3>
     })
 

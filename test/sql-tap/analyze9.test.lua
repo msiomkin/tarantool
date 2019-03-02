@@ -20,6 +20,8 @@ testprefix = "analyze9"
 -- functionality is working.
 --
 
+test.create_stat_view()
+
 -- SQL Analyze is working correctly only with memtx now.
 test:do_execsql_test(
     1.0,
@@ -69,25 +71,30 @@ box.internal.sql_create_function("msgpack_decode_sample", "TEXT", msgpack_decode
 test:do_execsql_test(
     1.2,
     [[
-        SELECT "tbl","idx","neq","nlt","ndlt",msgpack_decode_sample("sample") FROM "_sql_stat4" where "idx" = 'I1';
+        SELECT tbl,idx,neq,nlt,ndlt,sample FROM stat_view where idx = 'I1';
     ]], {
         -- <1.2>
-        "T1", "I1", "1 1", "0 0", "0 0", "(0) (0)", "T1", "I1", "1 1", "1 1", "1 1", "(1) (1)", 
-        "T1", "I1", "1 1", "2 2", "2 2", "(2) (2)", "T1", "I1", "1 1", "3 3", "3 3", "(3) (3)", 
-        "T1", "I1", "1 1", "4 4", "4 4", "(4) (4)"
+        "T1",
+        "I1",
+        "1 1","1 1","1 1","1 1","1 1",
+        "0 0","1 1","2 2","3 3","4 4",
+        "0 0","1 1","2 2","3 3","4 4",
+        "(0)","(0)","(1)","(1)","(2)","(2)","(3)","(3)","(4)","(4)"
         -- </1.2>
     })
 
 test:do_execsql_test(
     1.3,
     [[
-        SELECT "tbl","idx","neq","nlt","ndlt",msgpack_decode_sample("sample") FROM "_sql_stat4" where "idx" = 'T1';
-
+        SELECT tbl,idx,neq,nlt,ndlt,sample FROM stat_view where idx = 'pk_unnamed_T1_1';
     ]], {
         -- <1.3>
-        'T1', 'T1', '1', '0', '0', '(0)', 'T1', 'T1', '1', '1', '1', '(1)', 
-        'T1', 'T1', '1', '2', '2', '(2)', 'T1', 'T1', '1', '3', '3', '(3)', 
-        'T1', 'T1', '1', '4', '4', '(4)'
+        "T1",
+        "pk_unnamed_T1_1",
+        "1","1","1","1","1",
+        "0","1","2","3","4",
+        "0","1","2","3","4",
+        "(0)","(1)","(2)","(3)","(4)"
         -- </1.3>
     })
 
@@ -104,7 +111,7 @@ test:do_execsql_test(
         INSERT INTO t1 VALUES('text', 12);
         CREATE INDEX i1 ON t1(a, b);
         ANALYZE;
-        SELECT msgpack_decode_sample("sample") FROM "_sql_stat4";
+        SELECT sample FROM stat_view;
     ]], {
         -- <2.1>
         "text 12","some text 14","text","some text"

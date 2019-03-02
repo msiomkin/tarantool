@@ -348,6 +348,33 @@ local function db(self, cmd, ...)
 end
 test.db = db
 
+-- Create a view where tables and indexes names will be shown
+-- instead of their ID.
+local function create_stat_view(name)
+    if not name then
+        name = "stat_view"
+    end
+    box.sql.execute(string.format([[
+    CREATE VIEW
+        %s
+    AS SELECT
+        "_space"."name" AS tbl,
+        "_index"."name" AS idx,
+        "_sql_stat"."stat" as stat,
+        "_sql_stat"."neq" as neq,
+        "_sql_stat"."nlt" as nlt,
+        "_sql_stat"."ndlt" as ndlt,
+        "_sql_stat"."sample" as sample
+    FROM
+        "_sql_stat" LEFT JOIN
+        "_space" ON "_sql_stat"."space_id" = "_space"."id",
+        "_index" ON "_sql_stat"."space_id" = "_index"."id" AND
+        "_sql_stat"."index_id" = "_index"."iid"
+    ;
+    ]], name))
+end
+test.create_stat_view = create_stat_view
+
 -- returns first occurance of seed in input or -1
 local function lsearch(self, input, seed)
     local index = 1
