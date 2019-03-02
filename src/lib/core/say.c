@@ -170,7 +170,8 @@ log_set_level(struct log *log, enum say_level level)
 void
 log_set_format(struct log *log, log_format_func_t format_func)
 {
-	assert(format_func == say_format_plain ||
+	assert(format_func == say_format_json ||
+	       format_func == say_format_plain ||
 	       log->type == SAY_LOGGER_STDERR ||
 	       log->type == SAY_LOGGER_PIPE || log->type == SAY_LOGGER_FILE);
 

@@ -1,13 +1,17 @@
 #!/usr/bin/env tarantool
 
 local test = require('tap').test('log')
-test:plan(24)
+test:plan(25)
 
 --
 -- Check that Tarantool creates ADMIN session for #! script
 --
 local filename = "1.log"
 local message = "Hello, World!"
+
+jlog = require('log')
+test:ok(jlog.log_format("json") == nil, "no assertions")
+
 box.cfg{
     log=filename,
     memtx_memory=107374182,
