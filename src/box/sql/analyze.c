@@ -942,13 +942,13 @@ vdbe_emit_analyze_space(struct Parse *parse, struct space *space)
 			 * Thus the not-found jump of seekOp will never
 			 * be taken.
 			 */
-			for (int i = 0; i < part_count; i++) {
+			for (int j = 0; j < part_count; j++) {
 				uint32_t tabl_col =
-					idx->def->key_def->parts[i].fieldno;
+					idx->def->key_def->parts[j].fieldno;
 				sqlExprCodeGetColumnOfTable(vdbe, space->def,
 							    tab_cursor,
 							    tabl_col,
-							    prev_reg + i);
+							    prev_reg + j);
 			}
 			sqlVdbeAddOp3(vdbe, OP_MakeRecord, prev_reg, part_count,
 					  sample_array_reg + i);

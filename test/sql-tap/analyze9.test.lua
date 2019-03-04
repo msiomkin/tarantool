@@ -100,25 +100,6 @@ test:do_execsql_test(
 
 
 ---------------------------------------------------------------------------
--- This is really just to test SQL user function "msgpack_decode_sample".
---
-test:do_execsql_test(
-    2.1,
-    [[
-        DROP TABLE IF EXISTS t1;
-        CREATE TABLE t1(a TEXT PRIMARY KEY, b INT );
-        INSERT INTO t1 VALUES('some text', 14);
-        INSERT INTO t1 VALUES('text', 12);
-        CREATE INDEX i1 ON t1(a, b);
-        ANALYZE;
-        SELECT sample FROM stat_view;
-    ]], {
-        -- <2.1>
-        "text 12","some text 14","text","some text"
-        -- </2.1>
-    })
-
----------------------------------------------------------------------------
 test:do_execsql_test(
     3.1,
     [[
@@ -196,8 +177,12 @@ test:do_execsql_test(
     "3.3.2",
     [[
         ANALYZE;
-        SELECT lrange("neq", 1, 1) FROM "_sql_stat4" WHERE "idx" = 'I2';
-    ]], generate_tens_str(24))
+        SELECT neq FROM stat_view WHERE idx = 'I2';
+    ]], {
+    "10 3","10 4","10 3","10 1","10 3","10 3","10 1","10 4",
+    "10 3","10 4","10 2","10 4","10 4","10 3","10 1","10 3",
+    "10 1","10 3","10 3","10 1","10 2","10 4","10 3","10 3"
+    })
 
 ---------------------------------------------------------------------------
 -- 
@@ -259,7 +244,7 @@ test:do_test(
     function()
         insert_filler_rows_n(0, 10, 19)
         insert_filler_rows_n(20, 1, 100)
-        return test:execsql([[
+        return #test:execsql([[
             INSERT INTO t1(id, c, b, a) VALUES(null, 200, 1, 'a');
             INSERT INTO t1(id, c, b, a) VALUES(null, 200, 1, 'b');
             INSERT INTO t1(id, c, b, a) VALUES(null, 200, 1, 'c');
@@ -271,14 +256,13 @@ test:do_test(
             INSERT INTO t1(id, c, b, a) VALUES(null, 201, 4, 'h');
 
             ANALYZE;
-            SELECT count(*) FROM "_sql_stat4";
-
+            SELECT neq FROM stat_view;
         ]])
-        end, {
+        end,
             -- <4.1>
             48
             -- </4.1>
-        })
+        )
 
 test:do_execsql_test(
     4.2,
@@ -293,33 +277,30 @@ test:do_execsql_test(
 test:do_execsql_test(
     4.3,
     [[
-        SELECT "neq", lrange("nlt", 1, 3), lrange("ndlt", 1, 3), lrange(msgpack_decode_sample("sample"), 1, 3) 
-            FROM "_sql_stat4" WHERE "idx" = 'I1' ORDER BY "sample" LIMIT 16;
+        SELECT neq, nlt, ndlt, sample FROM stat_view WHERE idx = 'I1';
     ]], {
         -- <4.3>
-        "10 10 10","0 0 0","0 0 0","0 0 0","10 10 10","10 10 10","1 1 1","1 1 1","10 10 10","20 20 20",
-        "2 2 2","2 2 2","10 10 10","30 30 30","3 3 3","3 3 3","10 10 10","40 40 40","4 4 4","4 4 4",
-        "10 10 10","50 50 50","5 5 5","5 5 5","10 10 10","60 60 60","6 6 6","6 6 6","10 10 10","70 70 70",
-        "7 7 7","7 7 7","10 10 10","80 80 80","8 8 8","8 8 8","10 10 10","90 90 90","9 9 9","9 9 9",
-        "10 10 10","100 100 100","10 10 10","10 10 10","10 10 10","110 110 110","11 11 11","11 11 11",
-        "10 10 10","120 120 120","12 12 12","12 12 12","10 10 10","130 130 130","13 13 13","13 13 13",
-        "10 10 10","140 140 140","14 14 14","14 14 14","10 10 10","150 150 150","15 15 15","15 15 15"
+        "10 10 10","10 10 10","10 10 10","10 10 10","10 10 10","10 10 10",
+        "10 10 10","10 10 10","10 10 10","10 10 10","10 10 10","10 10 10",
+        "10 10 10","10 10 10","10 10 10","10 10 10","10 10 10","10 10 10",
+        "10 10 10","1 1 1","1 1 1","1 1 1","5 3 1","2 1 1","0 0 0","10 10 10",
+        "20 20 20","30 30 30","40 40 40","50 50 50","60 60 60","70 70 70",
+        "80 80 80","90 90 90","100 100 100","110 110 110","120 120 120",
+        "130 130 130","140 140 140","150 150 150","160 160 160","170 170 170",
+        "180 180 180","203 203 203","237 237 237","271 271 271","290 290 291",
+        "295 296 296","0 0 0","1 1 1","2 2 2","3 3 3","4 4 4","5 5 5","6 6 6",
+        "7 7 7","8 8 8","9 9 9","10 10 10","11 11 11","12 12 12","13 13 13",
+        "14 14 14","15 15 15","16 16 16","17 17 17","18 18 18","32 32 32",
+        "66 66 66","100 100 100","119 119 120","120 122 125",0,0,"0",1,1,"1",
+        2,2,"2",3,3,"3",4,4,"4",5,5,"5",6,6,"6",7,7,"7",8,8,"8",9,9,"9",
+        10,10,"10",11,11,"11",12,12,"12",13,13,"13",14,14,"14",15,15,"15",
+        16,16,"16",17,17,"17",18,18,"18",33,33,"33",67,67,"67",101,101,"101",
+        200,1,"b",201,4,"h"
         -- </4.3>
     })
 
 test:do_execsql_test(
     4.4,
-    [[
-        SELECT "neq", lrange("nlt", 1, 3), lrange("ndlt", 1, 3), lrange(msgpack_decode_sample("sample"), 1, 3) 
-        FROM "_sql_stat4" WHERE "idx" = 'I1' ORDER BY "sample" DESC LIMIT 2;
-    ]], {
-        -- <4.4>
-        "2 1 1","295 296 296","120 122 125","201 4 h","5 3 1","290 290 291","119 119 120","200 1 b"
-        -- </4.4>
-    })
-
-test:do_execsql_test(
-    4.5,
     [[
         SELECT count(DISTINCT c) FROM t1 WHERE c<201 
     ]], {
@@ -329,7 +310,7 @@ test:do_execsql_test(
     })
 
 test:do_execsql_test(
-    4.6,
+    4.5,
     [[
         SELECT count(DISTINCT c) FROM t1 WHERE c<200 
     ]], {
@@ -340,12 +321,12 @@ test:do_execsql_test(
 
 -- Check that the perioidic samples are present.
 test:do_execsql_test(
-    4.7,
+    4.6,
     [[
-        SELECT count(*) FROM "_sql_stat4" WHERE lrange(msgpack_decode_sample("sample"), 1, 1) IN ('34', '68', '102', '136', '170', '204', '238', '272');
+        SELECT sample FROM stat_view WHERE idx = 'pk_unnamed_T1_1';
     ]], {
         -- <4.7>
-        8
+        13,22,34,68,69,71,95,102,108,119,136,143,144,161,166,170,204,215,220,238,249,269,272,279
         -- </4.7>
     })
 
@@ -363,7 +344,7 @@ test:do_test(
         end
         return test:execsql([[
             ANALYZE;
-            SELECT count(*) FROM "_sql_stat4";
+            SELECT * FROM stat_view WHERE idx = 'I1';
         ]])
         end, {
             -- <4.8>
