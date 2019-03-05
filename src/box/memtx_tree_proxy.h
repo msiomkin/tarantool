@@ -34,10 +34,19 @@
 #include "tuple_hint.h"
 #include "tuple_compare.h"
 
+enum memtx_tree_type {
+	MEMTX_HINTED_TREE,
+	MEMTX_MULTIKEY_TREE,
+};
+
+template <enum memtx_tree_type tree_type>
+class MemtxTreeKeyData;
+
 /**
  * Struct that is used as a key in BPS tree definition.
  */
-class MemtxTreeKeyData {
+template<>
+class MemtxTreeKeyData<MEMTX_HINTED_TREE> {
 	/** Sequence of msgpacked search fields. */
 	const char *key;
 	/** Number of msgpacked search fields. */
@@ -82,10 +91,47 @@ public:
 	}
 };
 
+template<>
+class MemtxTreeKeyData<MEMTX_MULTIKEY_TREE> {
+	/** Sequence of msgpacked search fields. */
+	const char *key;
+	/** Number of msgpacked search fields. */
+	uint32_t part_count;
+public:
+	/**
+	 * Return "payload" data that this object stores:
+	 * key and part_count.
+	 */
+	const char *
+	get(uint32_t *part_count) const
+	{
+		*part_count = this->part_count;
+		return this->key;
+	}
+
+	/**
+	 * Perform this MemtxTreeKeyData object
+	 * initialization.
+	 */
+	void
+	set(const char *key, uint32_t part_count, struct key_def *key_def)
+	{
+		(void)key_def;
+		this->key = key;
+		this->part_count = part_count;
+	}
+};
+
+template <enum memtx_tree_type tree_type>
+class MemtxTreeData;
+
 /**
  * Struct that is used as a node in BPS tree definition.
  */
-class MemtxTreeData {
+template <>
+class MemtxTreeData<MEMTX_HINTED_TREE> {
+	/** Constant for general/partial specialization compatibility */
+	static const enum memtx_tree_type tree_type = MEMTX_HINTED_TREE;
 	/** Data tuple pointer. */
 	struct tuple *tuple;
 	/**
@@ -128,7 +174,7 @@ public:
 	 * identical, i.e. initialized with the same arguments.
 	 */
 	bool
-	is_identical(const MemtxTreeData *elem) const
+	is_identical(const MemtxTreeData<tree_type> *elem) const
 	{
 		return this->tuple == elem->tuple;
 	}
@@ -138,7 +184,8 @@ public:
 	 * MemtxTreeData using the key definition is specified.
 	 */
 	int
-	compare(const MemtxTreeData *elem, struct key_def *key_def) const
+	compare(const MemtxTreeData<tree_type> *elem,
+		struct key_def *key_def) const
 	{
 		if (likely(this->hint != elem->hint &&
 			   this->hint != INVALID_HINT &&
@@ -154,7 +201,7 @@ public:
 	 * MemtxTreeKeyData using the key definition is specified.
 	 */
 	int
-	compare_with_key(const MemtxTreeKeyData *key,
+	compare_with_key(const MemtxTreeKeyData<tree_type> *key,
 			 struct key_def *key_def) const
 	{
 		uint32_t part_count;
@@ -171,6 +218,85 @@ public:
 	}
 };
 
+template <>
+class MemtxTreeData<MEMTX_MULTIKEY_TREE> {
+	/** Constant for general/partial specialization compatibility */
+	static const enum memtx_tree_type tree_type = MEMTX_MULTIKEY_TREE;
+	/** Data tuple pointer. */
+	struct tuple *tuple;
+	/**
+	 * Hint for multikey index. Array index placeholder value.
+	 */
+	uint32_t multikey_idx;
+public:
+	/**
+	 * Return "payload" data that this object stores:
+	 * tuple.
+	 */
+	struct tuple *
+	get(void) const
+	{
+		return tuple;
+	}
+
+	/** Perform this MemtxTreeData object initialization. */
+	void
+	set(struct tuple *tuple, uint32_t multikey_idx)
+	{
+		this->tuple = tuple;
+		this->multikey_idx = multikey_idx;
+	}
+
+	/** Clear this MemtxTreeData object. */
+	void
+	clear(void)
+	{
+		this->tuple = NULL;
+	}
+
+	/**
+	 * Test if this MemtxTreeData and elem MemtxTreeData
+	 * represent exactly the same data.
+	 * While MemtxTreeData::compare performs binary data
+	 * comparison, this helper checks if the elements are
+	 * identical, i.e. initialized with the same arguments.
+	 */
+	bool
+	is_identical(const MemtxTreeData<tree_type> *elem) const
+	{
+		return this->tuple == elem->tuple &&
+		       this->multikey_idx == elem->multikey_idx;
+	}
+
+	/**
+	 * Compare this MemtxTreeData object with other elem
+	 * MemtxTreeData using the key definition is specified.
+	 */
+	int
+	compare(const MemtxTreeData<tree_type> *elem,
+		struct key_def *key_def) const
+	{
+		return tuple_compare_multikey(this->tuple, this->multikey_idx,
+					      elem->tuple, elem->multikey_idx,
+					      key_def);
+	}
+
+	/**
+	 * Compare this MemtxTreeData object with key
+	 * MemtxTreeKeyData using the key definition is specified.
+	 */
+	int
+	compare_with_key(const MemtxTreeKeyData<tree_type> *key,
+			 struct key_def *key_def) const
+	{
+		uint32_t part_count;
+		const char *key_data = key->get(&part_count);
+		return tuple_compare_with_key_multikey(this->tuple,
+				this->multikey_idx, key_data, part_count,
+				key_def);
+	}
+};
+
 #define BPS_TREE_NAME memtx_tree
 #define BPS_TREE_BLOCK_SIZE (512)
 #define BPS_TREE_EXTENT_SIZE MEMTX_EXTENT_SIZE
@@ -179,8 +305,8 @@ public:
 #define BPS_TREE_COMPARE_KEY(elem, key_ptr, key_def)				\
 	(&elem)->compare_with_key(key_ptr, key_def)
 #define BPS_TREE_IDENTICAL(elem_a, elem_b) (&elem_a)->is_identical(&elem_b)
-#define bps_tree_elem_t MemtxTreeData
-#define bps_tree_key_t MemtxTreeKeyData *
+#define bps_tree_elem_t MemtxTreeData<MEMTX_HINTED_TREE>
+#define bps_tree_key_t MemtxTreeKeyData<MEMTX_HINTED_TREE> *
 #define bps_tree_arg_t struct key_def *
 
 #include "salad/bps_tree.h"
@@ -195,7 +321,37 @@ public:
 #undef bps_tree_key_t
 #undef bps_tree_arg_t
 
-class TreeProxy {
+#define BPS_TREE_NAME memtx_multikey_tree
+#define BPS_TREE_BLOCK_SIZE (512)
+#define BPS_TREE_EXTENT_SIZE MEMTX_EXTENT_SIZE
+#define BPS_TREE_COMPARE(elem_a, elem_b, key_def)				\
+	(&elem_a)->compare(&elem_b, key_def)
+#define BPS_TREE_COMPARE_KEY(elem, key_ptr, key_def)				\
+	(&elem)->compare_with_key(key_ptr, key_def)
+#define BPS_TREE_IDENTICAL(elem_a, elem_b) (&elem_a)->is_identical(&elem_b)
+#define bps_tree_elem_t MemtxTreeData<MEMTX_MULTIKEY_TREE>
+#define bps_tree_key_t MemtxTreeKeyData<MEMTX_MULTIKEY_TREE> *
+#define bps_tree_arg_t struct key_def *
+
+#include "salad/bps_tree.h"
+
+#undef BPS_TREE_NAME
+#undef BPS_TREE_BLOCK_SIZE
+#undef BPS_TREE_EXTENT_SIZE
+#undef BPS_TREE_COMPARE
+#undef BPS_TREE_COMPARE_KEY
+#undef BPS_TREE_IDENTICAL
+#undef bps_tree_elem_t
+#undef bps_tree_key_t
+#undef bps_tree_arg_t
+
+template <enum memtx_tree_type tree_type>
+class TreeProxy;
+
+template <>
+class TreeProxy<MEMTX_HINTED_TREE> {
+	/** Constant for general/partial specialization compatibility */
+	static const enum memtx_tree_type tree_type = MEMTX_HINTED_TREE;
 public:
 	struct iterator	{
 		memtx_tree_iterator iterator;
@@ -214,26 +370,27 @@ public:
 		memtx_tree_destroy(&tree);
 	}
 
-	class MemtxTreeData *
+	class MemtxTreeData<tree_type> *
 	iterator_get_elem(struct iterator *it) const
 	{
 		return memtx_tree_iterator_get_elem(&tree, &it->iterator);
 	}
 
-	class MemtxTreeData *
+	class MemtxTreeData<tree_type> *
 	random(uint32_t seed) const
 	{
 		return memtx_tree_random(&tree, seed);
 	}
 
-	class MemtxTreeData *
-	find(MemtxTreeKeyData *key_data) const
+	class MemtxTreeData<tree_type> *
+	find(MemtxTreeKeyData<tree_type> *key_data) const
 	{
 		return memtx_tree_find(&tree, key_data);
 	}
 
 	struct iterator
-	lower_bound_elem(const MemtxTreeData *data, bool *exact) const
+	lower_bound_elem(const MemtxTreeData<tree_type> *data,
+			 bool *exact) const
 	{
 		iterator result;
 		result.iterator =
@@ -242,7 +399,8 @@ public:
 	}
 
 	struct iterator
-	upper_bound_elem(const MemtxTreeData *data, bool *exact) const
+	upper_bound_elem(const MemtxTreeData<tree_type> *data,
+			 bool *exact) const
 	{
 		iterator result;
 		result.iterator =
@@ -251,7 +409,7 @@ public:
 	}
 
 	struct iterator
-	lower_bound(MemtxTreeKeyData *data, bool *exact) const
+	lower_bound(MemtxTreeKeyData<tree_type> *data, bool *exact) const
 	{
 		iterator result;
 		result.iterator = memtx_tree_lower_bound(&tree, data, exact);
@@ -259,7 +417,7 @@ public:
 	}
 
 	struct iterator
-	upper_bound(MemtxTreeKeyData *data, bool *exact) const
+	upper_bound(MemtxTreeKeyData<tree_type> *data, bool *exact) const
 	{
 		struct iterator result;
 		result.iterator = memtx_tree_upper_bound(&tree, data, exact);
@@ -333,20 +491,21 @@ public:
 	}
 
 	int
-	build(MemtxTreeData *data, size_t size)
+	build(MemtxTreeData<tree_type> *data, size_t size)
 	{
 		return memtx_tree_build(&tree, data, size);
 
 	}
 
 	int
-	insert(MemtxTreeData *data, MemtxTreeData *replaced)
+	insert(MemtxTreeData<tree_type> *data,
+	       MemtxTreeData<tree_type> *replaced)
 	{
 		return memtx_tree_insert(&tree, *data, replaced);
 	}
 
 	void
-	remove(MemtxTreeData *data)
+	remove(MemtxTreeData<tree_type> *data)
 	{
 		memtx_tree_delete(&tree, *data);
 	}
@@ -364,6 +523,183 @@ public:
 	}
 private:
 	memtx_tree tree;
+};
+
+template <>
+class TreeProxy<MEMTX_MULTIKEY_TREE> {
+	/** Constant for general/partial specialization compatibility */
+	static const enum memtx_tree_type tree_type = MEMTX_MULTIKEY_TREE;
+public:
+	struct iterator	{
+		memtx_multikey_tree_iterator iterator;
+	};
+
+	void
+	create(struct key_def *def, bps_tree_extent_alloc_f alloc,
+	       bps_tree_extent_free_f free, void *alloc_ctx)
+	{
+		memtx_multikey_tree_create(&tree, def, alloc, free, alloc_ctx);
+	}
+
+	void
+	destroy(void)
+	{
+		memtx_multikey_tree_destroy(&tree);
+	}
+
+	class MemtxTreeData<tree_type> *
+	iterator_get_elem(struct iterator *it) const
+	{
+		return memtx_multikey_tree_iterator_get_elem(&tree, &it->iterator);
+	}
+
+	class MemtxTreeData<tree_type> *
+	random(uint32_t seed) const
+	{
+		return memtx_multikey_tree_random(&tree, seed);
+	}
+
+	class MemtxTreeData<tree_type> *
+	find(MemtxTreeKeyData<tree_type> *key_data) const
+	{
+		return memtx_multikey_tree_find(&tree, key_data);
+	}
+
+	struct iterator
+	lower_bound_elem(const MemtxTreeData<tree_type> *data,
+			 bool *exact) const
+	{
+		iterator result;
+		result.iterator =
+			memtx_multikey_tree_lower_bound_elem(&tree, *data, exact);
+		return result;
+	}
+
+	struct iterator
+	upper_bound_elem(const MemtxTreeData<tree_type> *data,
+			 bool *exact) const
+	{
+		iterator result;
+		result.iterator =
+			memtx_multikey_tree_upper_bound_elem(&tree, *data, exact);
+		return result;
+	}
+
+	struct iterator
+	lower_bound(MemtxTreeKeyData<tree_type> *data, bool *exact) const
+	{
+		iterator result;
+		result.iterator = memtx_multikey_tree_lower_bound(&tree, data, exact);
+		return result;
+	}
+
+	struct iterator
+	upper_bound(MemtxTreeKeyData<tree_type> *data, bool *exact) const
+	{
+		struct iterator result;
+		result.iterator = memtx_multikey_tree_upper_bound(&tree, data, exact);
+		return result;
+	}
+
+	struct iterator
+	iterator_first(void) const
+	{
+		struct iterator result;
+		result.iterator = memtx_multikey_tree_iterator_first(&tree);
+		return result;
+	}
+
+	struct iterator
+	iterator_last() const
+	{
+		struct iterator result;
+		result.iterator = memtx_multikey_tree_iterator_last(&tree);
+		return result;
+	}
+
+	struct iterator
+	invalid_iterator(void) const
+	{
+		struct iterator result;
+		result.iterator = memtx_multikey_tree_invalid_iterator();
+		return result;
+	}
+
+	void
+	iterator_freeze(iterator *itr)
+	{
+		memtx_multikey_tree_iterator_freeze(&tree, &itr->iterator);
+	}
+
+	void
+	iterator_destroy(iterator *itr)
+	{
+		memtx_multikey_tree_iterator_destroy(&tree, &itr->iterator);
+	}
+
+	bool
+	iterator_next(iterator *itr) const
+	{
+		return memtx_multikey_tree_iterator_next(&tree, &itr->iterator);
+	}
+
+	bool
+	iterator_prev(iterator *itr) const
+	{
+		return memtx_multikey_tree_iterator_prev(&tree, &itr->iterator);
+	}
+
+	bool
+	iterator_is_invalid(iterator *itr) const
+	{
+		return memtx_multikey_tree_iterator_is_invalid(&itr->iterator);
+	}
+
+	size_t
+	size(void) const
+	{
+		return memtx_multikey_tree_size(&tree);
+	}
+
+	size_t
+	mem_used(void) const
+	{
+		return memtx_multikey_tree_mem_used(&tree);
+	}
+
+	int
+	build(MemtxTreeData<tree_type> *data, size_t size)
+	{
+		return memtx_multikey_tree_build(&tree, data, size);
+
+	}
+
+	int
+	insert(MemtxTreeData<tree_type> *data,
+	       MemtxTreeData<tree_type> *replaced)
+	{
+		return memtx_multikey_tree_insert(&tree, *data, replaced);
+	}
+
+	void
+	remove(MemtxTreeData<tree_type> *data)
+	{
+		memtx_multikey_tree_delete(&tree, *data);
+	}
+
+	void
+	set_key_def(struct key_def *key_def)
+	{
+		tree.arg = key_def;
+	}
+
+	struct key_def *
+	get_key_def(void)
+	{
+		return tree.arg;
+	}
+private:
+	memtx_multikey_tree tree;
 };
 
 #endif /* TARANTOOL_BOX_MEMTX_TREE_PROXY_H_INCLUDED */
