@@ -636,12 +636,24 @@ local function upgrade(options)
         return
     end
 
+local function create_vcollation_space()
+    local _collation = box.space._collation
+    local format = _collation:format()
+    create_sysview(box.schema.COLLATION_ID, box.schema.VCOLLATION_ID)
+    box.space._vcollation:format(format)
+end
+
+local function upgrade_to_2_1_2()
+    create_vcollation_space()
+end
+
     local handlers = {
         {version = mkversion(1, 7, 6), func = upgrade_to_1_7_6, auto = true},
         {version = mkversion(1, 7, 7), func = upgrade_to_1_7_7, auto = true},
         {version = mkversion(1, 10, 0), func = upgrade_to_1_10_0, auto = true},
         {version = mkversion(1, 10, 2), func = upgrade_to_1_10_2, auto = true},
-        {version = mkversion(2, 1, 0), func = upgrade_to_2_1_0, auto = true}
+        {version = mkversion(2, 1, 0), func = upgrade_to_2_1_0, auto = true},
+        {version = mkversion(2, 1, 2), func = upgrade_to_2_1_2, auto = true}
     }
 
     for _, handler in ipairs(handlers) do
