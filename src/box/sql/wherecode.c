@@ -1472,7 +1472,7 @@ sqlWhereCodeOneLoopStart(WhereInfo * pWInfo,	/* Complete information about the W
 				    sqlWhereBegin(pParse, pOrTab, pOrExpr,
 						      0, 0, wctrlFlags,
 						      iCovCur);
-				assert(pSubWInfo || pParse->nErr
+				assert(pSubWInfo || pParse->is_aborted
 				       || db->mallocFailed);
 				if (pSubWInfo) {
 					WhereLoop *pSubLoop;
