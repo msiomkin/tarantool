@@ -52,7 +52,6 @@ sqlPrepare(sql * db,	/* Database handle. */
 	       const char **pzTail	/* OUT: End of parsed string */
     )
 {
-	char *zErrMsg = 0;	/* Error message */
 	int rc = SQL_OK;	/* Result code */
 	Parse sParse;		/* Parsing context */
 	sql_parser_create(&sParse, db);
@@ -89,25 +88,24 @@ sqlPrepare(sql * db,	/* Database handle. */
 		}
 		zSqlCopy = sqlDbStrNDup(db, zSql, nBytes);
 		if (zSqlCopy) {
-			sqlRunParser(&sParse, zSqlCopy, &zErrMsg);
+			sqlRunParser(&sParse, zSqlCopy);
 			sParse.zTail = &zSql[sParse.zTail - zSqlCopy];
 			sqlDbFree(db, zSqlCopy);
 		} else {
 			sParse.zTail = &zSql[nBytes];
 		}
 	} else {
-		sqlRunParser(&sParse, zSql, &zErrMsg);
+		sqlRunParser(&sParse, zSql);
 	}
 	assert(0 == sParse.nQueryLoop);
 
-	if (sParse.rc == SQL_DONE)
-		sParse.rc = SQL_OK;
 	if (db->mallocFailed)
-		sParse.rc = SQL_TARANTOOL_ERROR;
+		sParse.is_aborted = true;
 	if (pzTail) {
 		*pzTail = sParse.zTail;
 	}
-	rc = sParse.rc;
+	if (sParse.is_aborted)
+		rc = SQL_TARANTOOL_ERROR;
 
 	if (rc == SQL_OK && sParse.pVdbe && sParse.explain) {
 		static const char *const azColName[] = {
@@ -168,11 +166,7 @@ sqlPrepare(sql * db,	/* Database handle. */
 		*ppStmt = (sql_stmt *) sParse.pVdbe;
 	}
 
-	if (zErrMsg) {
-		sqlErrorWithMsg(db, rc, "%s", zErrMsg);
-	} else {
-		sqlError(db, rc);
-	}
+	sqlError(db, rc);
 
 	/* Delete any TriggerPrg structures allocated while parsing this statement. */
 	while (sParse.pTriggerPrg) {
