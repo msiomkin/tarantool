@@ -211,7 +211,8 @@ sqlErrorWithMsg(sql * db, int err_code, const char *zFormat, ...)
 }
 
 /*
- * Add an error message to pParse->zErrMsg and increment pParse->nErr.
+ * Add an error to the diagnostics area, increment pParse->nErr
+ * and set pParse->rc.
  * The following formatting characters are allowed:
  *
  *      %s      Insert a string

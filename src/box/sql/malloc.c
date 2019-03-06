@@ -55,9 +55,7 @@ sql_sized_malloc(int nByte)
 		p[0] = nByte;
 		p++;
 	} else {
-		testcase(sqlGlobalConfig.xLog != 0);
-		sql_log(SQL_NOMEM,
-			    "failed to allocate %u bytes of memory", nByte);
+		diag_set(OutOfMemory, nByte, "realloc", "p");
 	}
 	return (void *)p;
 }
@@ -115,10 +113,7 @@ sql_sized_realloc(void *pPrior, int nByte)
 		p[0] = nByte;
 		p++;
 	} else {
-		testcase(sqlGlobalConfig.xLog != 0);
-		sql_log(SQL_NOMEM,
-			    "failed memory resize %u to %u bytes",
-			    sql_sized_sizeof(pPrior), nByte);
+		diag_set(OutOfMemory, nByte, "malloc", "p");
 	}
 	return (void *)p;
 }
