@@ -2655,7 +2655,6 @@ struct Parse {
 	sql *db;		/* The main database structure */
 	char *zErrMsg;		/* An error message */
 	Vdbe *pVdbe;		/* An engine for executing database bytecode */
-	int rc;			/* Return code from execution */
 	u8 colNamesSet;		/* TRUE after OP_ColumnName has been issued to pVdbe */
 	u8 nTempReg;		/* Number of temporary registers in aTempReg[] */
 	u8 isMultiWrite;	/* True if statement may modify/insert multiple rows */
@@ -2690,6 +2689,8 @@ struct Parse {
 	u8 eOrconf;		/* Default ON CONFLICT policy for trigger steps */
 	/** Region to make SQL temp allocations. */
 	struct region region;
+	/** True, if error should be raised after parsing. */
+	bool is_aborted;
 
   /**************************************************************************
   * Fields above must be initialized to zero.  The fields that follow,
@@ -3200,7 +3201,7 @@ void sqlDequote(char *);
 void sqlNormalizeName(char *z);
 void sqlTokenInit(Token *, char *);
 int sqlKeywordCode(const unsigned char *, int);
-int sqlRunParser(Parse *, const char *, char **);
+int sqlRunParser(Parse *, const char *);
 
 /**
  * Increment error counter.
