@@ -511,7 +511,7 @@ sqlRunParser(Parse * pParse, const char *zSql)
 				diag_set(ClientError, ER_SQL_UNKNOWN_TOKEN,
 					 pParse->sLastToken.n,
 					 pParse->sLastToken.z);
-				sql_parser_error(pParse);
+				pParse->is_aborted = true;
 				break;
 			}
 		} else {
@@ -533,7 +533,7 @@ sqlRunParser(Parse * pParse, const char *zSql)
 		pParse->is_aborted = true;
 	if (pParse->is_aborted && pParse->zErrMsg == 0)
 		pParse->zErrMsg = sqlMPrintf(db, "%s", tarantoolErrorMessage());
-	if (pParse->pVdbe != NULL && pParse->nErr > 0) {
+	if (pParse->pVdbe != NULL && pParse->is_aborted) {
 		sqlVdbeDelete(pParse->pVdbe);
 		pParse->pVdbe = 0;
 	}
