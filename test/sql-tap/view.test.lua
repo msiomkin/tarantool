@@ -302,7 +302,7 @@ test:do_catchsql_test(
     [[
         CREATE VIEW v1err(x,y) AS SELECT a, b+c, c-b FROM t1;
         SELECT * FROM v1err;
-    ]], {1, "expected 2 columns for 'V1ERR' but got 3"})
+    ]], {1, "Failed to create space 'V1ERR': number of aliases doesn't match provided columns"})
 
 test:do_catchsql_test(
     "view-3.3.5.2",
@@ -310,7 +310,7 @@ test:do_catchsql_test(
         DROP VIEW IF EXISTS v1err;
         CREATE VIEW v1err(w,x,y,z) AS SELECT a, b+c, c-b FROM t1;
         SELECT * FROM v1err;
-    ]], {1, "expected 4 columns for 'V1ERR' but got 3"})
+    ]], {1, "Failed to create space 'V1ERR': number of aliases doesn't match provided columns"})
 
 -- #MUST_WORK_TEST no query solution
 -- # ifcapable compound {

@@ -5524,10 +5524,10 @@ sqlSelect(Parse * pParse,		/* The parser context */
 		 * columns in the SELECT on the RHS
 		 */
 		if ((int)space->def->field_count != pSub->pEList->nExpr) {
-			sqlErrorMsg(pParse,
-					"expected %d columns for '%s' but got %d",
-					space->def->field_count, space->def->name,
-					pSub->pEList->nExpr);
+			diag_set(ClientError, ER_CREATE_SPACE, space->def->name,
+				 "number of aliases doesn't match provided "\
+				 "columns");
+			pParse->is_aborted = true;
 			goto select_end;
 		}
 

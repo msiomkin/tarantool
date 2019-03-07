@@ -432,7 +432,9 @@ sqlAddColumn(Parse * pParse, Token * pName, struct type_def *type_def)
 
 #if SQL_MAX_COLUMN
 	if ((int)def->field_count + 1 > db->aLimit[SQL_LIMIT_COLUMN]) {
-		sqlErrorMsg(pParse, "too many columns on %s", def->name);
+		diag_set(ClientError, ER_CREATE_SPACE, def->name,
+			 "too many columns");
+		pParse->is_aborted = true;
 		return;
 	}
 #endif
@@ -521,9 +523,9 @@ sqlAddDefaultValue(Parse * pParse, ExprSpan * pSpan)
 		struct space_def *def = pParse->new_space->def;
 		if (!sqlExprIsConstantOrFunction
 		    (pSpan->pExpr, db->init.busy)) {
-			sqlErrorMsg(pParse,
-					"default value of column [%s] is not constant",
-					def->fields[def->field_count - 1].name);
+			diag_set(ClientError, ER_CREATE_SPACE, def->name,
+				 "default value of column is not constant");
+			pParse->is_aborted = true;
 		} else {
 			assert(def != NULL);
 			struct field_def *field =
@@ -588,9 +590,9 @@ sqlAddPrimaryKey(Parse * pParse,	/* Parsing context */
 	if (space == NULL)
 		goto primary_key_exit;
 	if (sql_space_primary_key(space) != NULL) {
-		sqlErrorMsg(pParse,
-				"table \"%s\" has more than one primary key",
-				space->def->name);
+		diag_set(ClientError, ER_CREATE_SPACE, space->def->name,
+			 "too many primary keys");
+		pParse->is_aborted = true;
 		goto primary_key_exit;
 	}
 	if (pList == NULL) {
@@ -636,8 +638,10 @@ sqlAddPrimaryKey(Parse * pParse,	/* Parsing context */
 		if (db->mallocFailed)
 			goto primary_key_exit;
 	} else if (autoInc) {
-		sqlErrorMsg(pParse, "AUTOINCREMENT is only allowed on an "
-				"INTEGER PRIMARY KEY or INT PRIMARY KEY");
+		diag_set(ClientError, ER_CREATE_SPACE, space->def->name,
+			 "AUTOINCREMENT is only allowed on an INTEGER PRIMARY "\
+			 "KEY or INT PRIMARY KEY");
+		pParse->is_aborted = true;
 		goto primary_key_exit;
 	} else {
 		sql_create_index(pParse, 0, 0, pList, 0, sortOrder, false,
@@ -1144,9 +1148,10 @@ sqlEndTable(Parse * pParse,	/* Parse context */
 
 	if (!new_space->def->opts.is_view) {
 		if (sql_space_primary_key(new_space) == NULL) {
-			sqlErrorMsg(pParse,
-					"PRIMARY KEY missing on table %s",
-					new_space->def->name);
+			diag_set(ClientError, ER_CREATE_SPACE,
+				 new_space->def->name,
+				 "PRIMARY KEY missing");
+			pParse->is_aborted = true;
 			goto cleanup;
 		}
 	}
@@ -1279,10 +1284,10 @@ sql_create_view(struct Parse *parse_context, struct Token *begin,
 		goto create_view_fail;
 	if (aliases != NULL) {
 		if ((int)select_res_space->def->field_count != aliases->nExpr) {
-			sqlErrorMsg(parse_context, "expected %d columns "\
-					"for '%s' but got %d", aliases->nExpr,
-					space->def->name,
-					select_res_space->def->field_count);
+			diag_set(ClientError, ER_CREATE_SPACE, space->def->name,
+				 "number of aliases doesn't match provided "\
+				 "columns");
+			parse_context->is_aborted = true;
 			goto create_view_fail;
 		}
 		sqlColumnsFromExprList(parse_context, aliases, space->def);
