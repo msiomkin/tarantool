@@ -267,14 +267,14 @@ int
 sqlCheckIdentifierName(Parse *pParse, char *zName)
 {
 	ssize_t len = strlen(zName);
-
-	if (len > BOX_NAME_MAX || identifier_check(zName, len) != 0) {
-		sqlErrorMsg(pParse,
-				"identifier name is invalid: %s",
-				zName);
-		return SQL_ERROR;
+	if (len <= BOX_NAME_MAX && identifier_check(zName, len) == 0)
+		return SQL_OK;
+	if (len > BOX_NAME_MAX) {
+		diag_set(ClientError, ER_IDENTIFIER,
+			 tt_cstr(zName, BOX_INVALID_NAME_MAX));
 	}
-	return SQL_OK;
+	pParse->is_aborted = true;
+	return SQL_ERROR;
 }
 
 /**
@@ -2942,11 +2942,8 @@ sqlSavepoint(Parse * pParse, int op, Token * pName)
 			return;
 		}
 		if (op == SAVEPOINT_BEGIN &&
-			sqlCheckIdentifierName(pParse, zName)
-				!= SQL_OK) {
-			sqlErrorMsg(pParse, "bad savepoint name");
+		    sqlCheckIdentifierName(pParse, zName) != SQL_OK)
 			return;
-		}
 		sqlVdbeAddOp4(v, OP_Savepoint, op, 0, 0, zName, P4_DYNAMIC);
 	}
 }
