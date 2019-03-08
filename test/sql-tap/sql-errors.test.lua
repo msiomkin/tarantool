@@ -28,7 +28,7 @@ test:do_catchsql_test(
 	create_statement,
 	{
 		-- <sql-errors-1.2>
-		1,"Failed to create space 'T2': too many columns"
+		1,"Failed to create space 'T2': space column count 2001 exceeds the limit (2000)"
 		-- </sql-errors-1.2>
 	})
 

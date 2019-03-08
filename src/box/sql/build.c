@@ -432,8 +432,8 @@ sqlAddColumn(Parse * pParse, Token * pName, struct type_def *type_def)
 
 #if SQL_MAX_COLUMN
 	if ((int)def->field_count + 1 > db->aLimit[SQL_LIMIT_COLUMN]) {
-		diag_set(ClientError, ER_CREATE_SPACE, def->name,
-			 "too many columns");
+		diag_set(ClientError, ER_SQL_COLUMN_COUNT_MAX, def->name,
+			 def->field_count + 1, db->aLimit[SQL_LIMIT_COLUMN]);
 		pParse->is_aborted = true;
 		return;
 	}
