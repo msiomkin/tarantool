@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(10)
+test:plan(11)
 
 test:execsql([[
 	CREATE TABLE t0 (i INT PRIMARY KEY);
@@ -110,6 +110,16 @@ test:do_catchsql_test(
 		-- <sql-errors-1.10>
 		1,"Failed to create foreign key constraint 'FK_CONSTRAINT_1_T10': referenced space can't be VIEW"
 		-- </sql-errors-1.10>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.11",
+	[[
+		CREATE VIEW v11 AS SELECT * FROM t0 WHERE i = ?;
+	]], {
+		-- <sql-errors-1.11>
+		1,"Failed to create space 'V11': parameters are not allowed in views"
+		-- </sql-errors-1.11>
 	})
 
 test:finish_test()

@@ -1269,8 +1269,10 @@ sql_create_view(struct Parse *parse_context, struct Token *begin,
 {
 	struct sql *db = parse_context->db;
 	if (parse_context->nVar > 0) {
-		sqlErrorMsg(parse_context,
-				"parameters are not allowed in views");
+		diag_set(ClientError, ER_CREATE_SPACE,
+			 sqlNameFromToken(db, name),
+			 "parameters are not allowed in views");
+		parse_context->is_aborted = true;
 		goto create_view_fail;
 	}
 	sqlStartTable(parse_context, name, if_exists);
