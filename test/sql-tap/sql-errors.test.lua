@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(20)
+test:plan(22)
 
 test:execsql([[
 	CREATE TABLE t0 (i INT PRIMARY KEY);
@@ -240,6 +240,27 @@ test:do_catchsql_test(
 		-- <sql-errors-1.20>
 		1,"The number of tables in a join 65 exceeds the limit (64)"
 		-- </sql-errors-1.20>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.21",
+	[[
+		SELECT $65001;
+	]], {
+		-- <sql-errors-1.21>
+		1,"SQL bind parameter limit reached: 65000"
+		-- </sql-errors-1.21>
+	})
+
+select_statement = 'SELECT '..string.rep('?, ', box.schema.SQL_BIND_PARAMETER_MAX)..'?;'
+
+test:do_catchsql_test(
+	"sql-errors-1.22",
+	select_statement,
+	{
+		-- <sql-errors-1.22>
+		1,"SQL bind parameter limit reached: 65000"
+		-- </sql-errors-1.22>
 	})
 
 test:finish_test()

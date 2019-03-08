@@ -1173,9 +1173,9 @@ sqlExprAssignVarNumber(Parse * pParse, Expr * pExpr, u32 n)
 			testcase(i == SQL_BIND_PARAMETER_MAX - 1);
 			testcase(i == SQL_BIND_PARAMETER_MAX);
 			if (!is_ok || i < 1 || i > SQL_BIND_PARAMETER_MAX) {
-				sqlErrorMsg(pParse,
-						"variable number must be between $1 and $%d",
-						SQL_BIND_PARAMETER_MAX);
+				diag_set(ClientError, ER_SQL_BIND_PARAMETER_MAX,
+					 SQL_BIND_PARAMETER_MAX);
+				pParse->is_aborted = true;
 				return;
 			}
 			if (x > pParse->nVar) {
@@ -1203,7 +1203,9 @@ sqlExprAssignVarNumber(Parse * pParse, Expr * pExpr, u32 n)
 	}
 	pExpr->iColumn = x;
 	if (x > SQL_BIND_PARAMETER_MAX) {
-		sqlErrorMsg(pParse, "too many SQL variables");
+		diag_set(ClientError, ER_SQL_BIND_PARAMETER_MAX,
+			 SQL_BIND_PARAMETER_MAX);
+		pParse->is_aborted = true;
 	}
 }
 
