@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(9)
+test:plan(10)
 
 test:execsql([[
 	CREATE TABLE t0 (i INT PRIMARY KEY);
@@ -100,6 +100,16 @@ test:do_catchsql_test(
 		-- <sql-errors-1.9>
 		1,"Can't drop space 'V0': use DROP VIEW"
 		-- </sql-errors-1.9>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.10",
+	[[
+		CREATE TABLE t10(i INT PRIMARY KEY REFERENCES v0);
+	]], {
+		-- <sql-errors-1.10>
+		1,"Failed to create foreign key constraint 'FK_CONSTRAINT_1_T10': referenced space can't be VIEW"
+		-- </sql-errors-1.10>
 	})
 
 test:finish_test()

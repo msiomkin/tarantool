@@ -1760,12 +1760,6 @@ sql_create_foreign_key(struct Parse *parse_context, struct SrcList *child,
 			diag_set(ClientError, ER_NO_SUCH_SPACE, parent_name);;
 			goto tnt_error;
 		}
-	} else {
-		if (parent_space->def->opts.is_view) {
-			sqlErrorMsg(parse_context,
-					"referenced table can't be view");
-			goto exit_create_fk;
-		}
 	}
 	if (constraint == NULL && !is_alter) {
 		if (parse_context->constraintName.n == 0) {
@@ -1782,6 +1776,11 @@ sql_create_foreign_key(struct Parse *parse_context, struct SrcList *child,
 	}
 	if (constraint_name == NULL)
 		goto exit_create_fk;
+	if (!is_self_referenced && parent_space->def->opts.is_view) {
+		diag_set(ClientError, ER_CREATE_FK_CONSTRAINT, constraint_name,
+			"referenced space can't be VIEW");
+		goto tnt_error;
+	}
 	const char *error_msg = "number of columns in foreign key does not "
 				"match the number of columns in the primary "
 				"index of referenced table";
