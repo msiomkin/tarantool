@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(14)
+test:plan(20)
 
 test:execsql([[
 	CREATE TABLE t0 (i INT PRIMARY KEY);
@@ -150,6 +150,96 @@ test:do_catchsql_test(
 		-- <sql-errors-1.14>
 		1,"Hex literal 0x10000000000000000 length 17 exceeds the supported limit (16)"
 		-- </sql-errors-1.14>
+	})
+
+select_statement = 'SELECT i FROM t0 WHERE i = 0'
+for i = 1, 200 do
+	select_statement = select_statement .. ' OR i = ' .. i
+end
+select_statement = select_statement .. ';'
+
+test:do_catchsql_test(
+	"sql-errors-1.15",
+	select_statement,
+	{
+		-- <sql-errors-1.15>
+		1,"Number of nodes in expression tree 201 exceeds the limit (200)"
+		-- </sql-errors-1.15>
+	})
+
+select_statement = 'SELECT CHAR(1'
+for i = 1, 127 do
+	select_statement = select_statement .. ', ' .. i
+end
+select_statement = select_statement .. ');'
+
+test:do_catchsql_test(
+	"sql-errors-1.16",
+	select_statement,
+	{
+		-- <sql-errors-1.16>
+		1,"Number of arguments to function CHAR 128 exceeds the limit (127)"
+		-- </sql-errors-1.16>
+	})
+
+select_statement = 'SELECT MAX(1'
+for i = 1, 127 do
+	select_statement = select_statement .. ', ' .. i
+end
+select_statement = select_statement .. ');'
+
+test:do_catchsql_test(
+	"sql-errors-1.17",
+	select_statement,
+	{
+		-- <sql-errors-1.17>
+		1,"Number of arguments to function MAX 128 exceeds the limit (127)"
+		-- </sql-errors-1.17>
+	})
+
+select_statement = 'SELECT 0'
+for i = 1, 30 do
+	select_statement = select_statement .. ' UNION ALL SELECT ' .. i
+end
+select_statement = select_statement .. ';'
+
+test:do_catchsql_test(
+	"sql-errors-1.18",
+	select_statement,
+	{
+		-- <sql-errors-1.18>
+		1,"The number of UNION or EXCEPT or INTERSECT operations 31 exceeds the limit (30)"
+		-- </sql-errors-1.18>
+	})
+
+select_statement = 'SELECT 0'
+for i = 1, 2000 do
+	select_statement = select_statement .. ', ' .. i
+end
+select_statement = select_statement .. ';'
+
+test:do_catchsql_test(
+	"sql-errors-1.19",
+	select_statement,
+	{
+		-- <sql-errors-1.19>
+		1,"The number of columns in result set 2001 exceeds the limit (2000)"
+		-- </sql-errors-1.19>
+	})
+
+select_statement = 'SELECT * FROM t0'
+for i = 1, 64 do
+	select_statement = select_statement .. ', t0 as t' .. i
+end
+select_statement = select_statement .. ';'
+
+test:do_catchsql_test(
+	"sql-errors-1.20",
+	select_statement,
+	{
+		-- <sql-errors-1.20>
+		1,"The number of tables in a join 65 exceeds the limit (64)"
+		-- </sql-errors-1.20>
 	})
 
 test:finish_test()

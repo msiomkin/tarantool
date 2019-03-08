@@ -519,6 +519,7 @@ t;
   188: box.error.SQL_COLUMN_COUNT_MAX
   189: box.error.HEX_LITERAL_MAX
   190: box.error.INT_LITERAL_MAX
+  191: box.error.SQL_PARSER_LIMIT
 ...
 test_run:cmd("setopt delimiter ''");
 ---

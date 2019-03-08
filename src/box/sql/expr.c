@@ -727,15 +727,14 @@ codeVectorCompare(Parse * pParse,	/* Code generator context */
 int
 sqlExprCheckHeight(Parse * pParse, int nHeight)
 {
-	int rc = SQL_OK;
 	int mxHeight = pParse->db->aLimit[SQL_LIMIT_EXPR_DEPTH];
 	if (nHeight > mxHeight) {
-		sqlErrorMsg(pParse,
-				"Expression tree is too large (maximum depth %d)",
-				mxHeight);
-		rc = SQL_ERROR;
+		diag_set(ClientError, ER_SQL_PARSER_LIMIT, "Number of nodes "\
+			 "in expression tree", 0, "", nHeight, mxHeight);
+		pParse->is_aborted = true;
+		return SQL_ERROR;
 	}
-	return rc;
+	return SQL_OK;
 }
 
 /* The following three functions, heightOfExpr(), heightOfExprList()

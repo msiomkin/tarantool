@@ -5064,7 +5064,10 @@ selectExpander(Walker * pWalker, Select * p)
 	}
 #if SQL_MAX_COLUMN
 	if (p->pEList && p->pEList->nExpr > db->aLimit[SQL_LIMIT_COLUMN]) {
-		sqlErrorMsg(pParse, "too many columns in result set");
+		diag_set(ClientError, ER_SQL_PARSER_LIMIT, "The number of "\
+			 "columns in result set", 0, "", p->pEList->nExpr,
+			 db->aLimit[SQL_LIMIT_COLUMN]);
+		pParse->is_aborted = true;
 		return WRC_Abort;
 	}
 #endif

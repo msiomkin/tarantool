@@ -410,9 +410,10 @@ cmd ::= select(X).  {
         (mxSelect = pParse->db->aLimit[SQL_LIMIT_COMPOUND_SELECT])>0 &&
         cnt>mxSelect
       ){
-        sqlErrorMsg(pParse, "Too many UNION or EXCEPT or INTERSECT "
-                        "operations (limit %d is set)",
-                        pParse->db->aLimit[SQL_LIMIT_COMPOUND_SELECT]);
+         diag_set(ClientError, ER_SQL_PARSER_LIMIT, "The number of UNION or "\
+                  "EXCEPT or INTERSECT operations", 0, "", cnt,
+                  pParse->db->aLimit[SQL_LIMIT_COMPOUND_SELECT]);
+         pParse->is_aborted = true;
       }
     }
   }
@@ -930,7 +931,10 @@ expr(A) ::= CAST(X) LP expr(E) AS typedef(T) RP(Y). {
 %endif  SQL_OMIT_CAST
 expr(A) ::= id(X) LP distinct(D) exprlist(Y) RP(E). {
   if( Y && Y->nExpr>pParse->db->aLimit[SQL_LIMIT_FUNCTION_ARG] ){
-    sqlErrorMsg(pParse, "too many arguments on function %T", &X);
+    diag_set(ClientError, ER_SQL_PARSER_LIMIT, "Number of "\
+             "arguments to function ", X.n, X.z, Y->nExpr,
+             pParse->db->aLimit[SQL_LIMIT_FUNCTION_ARG]);
+    pParse->is_aborted = true;
   }
   A.pExpr = sqlExprFunction(pParse, Y, &X);
   spanSet(&A,&X,&E);
@@ -946,7 +950,10 @@ expr(A) ::= id(X) LP distinct(D) exprlist(Y) RP(E). {
 type_func(A) ::= CHAR(A) .
 expr(A) ::= type_func(X) LP distinct(D) exprlist(Y) RP(E). {
   if( Y && Y->nExpr>pParse->db->aLimit[SQL_LIMIT_FUNCTION_ARG] ){
-    sqlErrorMsg(pParse, "too many arguments on function %T", &X);
+    diag_set(ClientError, ER_SQL_PARSER_LIMIT, "Number of "\
+             "arguments to function ", X.n, X.z, Y->nExpr,
+             pParse->db->aLimit[SQL_LIMIT_FUNCTION_ARG]);
+    pParse->is_aborted = true;
   }
   A.pExpr = sqlExprFunction(pParse, Y, &X);
   spanSet(&A,&X,&E);
