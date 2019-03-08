@@ -2,15 +2,18 @@
 test = require("sqltester")
 test:plan(9)
 
+test:execsql([[
+	CREATE TABLE t0 (i INT PRIMARY KEY);
+	CREATE VIEW v0 AS SELECT * FROM t0;
+]])
+
 test:do_catchsql_test(
 	"sql-errors-1.1",
 	[[
-		CREATE TABLE t1 (i INT PRIMARY KEY);
-		CREATE VIEW v1 AS SELECT * FROM t1;
-		ANALYZE v1;
+		ANALYZE v0;
 	]], {
 		-- <sql-errors-1.1>
-		1,"ANALYZE statement argument V1 is not a base table"
+		1,"ANALYZE statement argument V0 is not a base table"
 		-- </sql-errors-1.1>
 	})
 
@@ -72,8 +75,7 @@ test:do_catchsql_test(
 test:do_catchsql_test(
 	"sql-errors-1.7",
 	[[
-		CREATE TABLE t7 (i INT PRIMARY KEY);
-		CREATE VIEW v7(a,b) AS SELECT * FROM t7;
+		CREATE VIEW v7(a,b) AS SELECT * FROM t0;
 	]], {
 		-- <sql-errors-1.7>
 		1,"Failed to create space 'V7': number of aliases doesn't match provided columns"
@@ -83,24 +85,21 @@ test:do_catchsql_test(
 test:do_catchsql_test(
 	"sql-errors-1.8",
 	[[
-		CREATE TABLE t8 (i INT PRIMARY KEY);
-		DROP VIEW t8;
+		DROP VIEW t0;
 	]], {
 		-- <sql-errors-1.8>
-		1,"Can't drop space 'T8': use DROP TABLE"
+		1,"Can't drop space 'T0': use DROP TABLE"
 		-- </sql-errors-1.8>
 	})
 
 test:do_catchsql_test(
 	"sql-errors-1.9",
 	[[
-		CREATE TABLE t9 (i INT PRIMARY KEY);
-		CREATE VIEW v9 AS SELECT * FROM t9;
-		DROP TABLE v9;
+		DROP TABLE v0;
 	]], {
-		-- <sql-errors-1.8>
-		1,"Can't drop space 'V9': use DROP VIEW"
-		-- </sql-errors-1.8>
+		-- <sql-errors-1.9>
+		1,"Can't drop space 'V0': use DROP VIEW"
+		-- </sql-errors-1.9>
 	})
 
 test:finish_test()
