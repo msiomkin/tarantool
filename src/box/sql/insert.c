@@ -389,9 +389,10 @@ sqlInsert(Parse * pParse,	/* Parser context */
 				}
 			}
 			if (j >= (int) space_def->field_count) {
-				sqlErrorMsg(pParse,
-						"table %S has no column named %s",
-						pTabList, 0, pColumn->a[i].zName);
+				diag_set(ClientError, ER_NO_SUCH_FIELD_NAME,
+					 pColumn->a[i].zName,
+					 pTabList->a[0].zName);
+				pParse->is_aborted = true;
 				goto insert_cleanup;
 			}
 			if (bit_test(used_columns, j)) {
