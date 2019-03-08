@@ -3313,15 +3313,15 @@ expr_code_int(struct Parse *parse, struct Expr *expr, bool is_neg,
 		int c = sql_dec_or_hex_to_i64(z, &value);
 		if (c == 1 || (c == 2 && !is_neg) ||
 		    (is_neg && value == SMALLEST_INT64)) {
+			const char *sign = is_neg ? "-" : "";
 			if (sql_strnicmp(z, "0x", 2) == 0) {
-				sqlErrorMsg(parse,
-						"hex literal too big: %s%s",
-						is_neg ? "-" : "", z);
+				diag_set(ClientError, ER_HEX_LITERAL_MAX, sign,
+					 z, strlen(z) - 2, 16);
 			} else {
-				sqlErrorMsg(parse,
-						"oversized integer: %s%s",
-						is_neg ? "-" : "", z);
+				diag_set(ClientError, ER_INT_LITERAL_MAX, sign,
+					 z, INT64_MIN, INT64_MAX);
 			}
+			parse->is_aborted = true;
 		} else {
 			if (is_neg)
 				value = c == 2 ? SMALLEST_INT64 : -value;

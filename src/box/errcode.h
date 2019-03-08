@@ -241,6 +241,8 @@ struct errcode_record {
 	/*186 */_(ER_SQL_PARSER_GENERIC,	"%s") \
 	/*187 */_(ER_SQL_ANALYZE_ARGUMENT,	"ANALYZE statement argument %s is not a base table") \
 	/*188 */_(ER_SQL_COLUMN_COUNT_MAX,	"Failed to create space '%s': space column count %d exceeds the limit (%d)") \
+	/*189 */_(ER_HEX_LITERAL_MAX,		"Hex literal %s%s length %d exceeds the supported limit (%d)") \
+	/*190 */_(ER_INT_LITERAL_MAX,		"Integer literal %s%s exceeds the supported range %lld - %lld") \
 
 /*
  * !IMPORTANT! Please follow instructions at start of the file

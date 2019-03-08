@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(12)
+test:plan(14)
 
 test:execsql([[
 	CREATE TABLE t0 (i INT PRIMARY KEY);
@@ -130,6 +130,26 @@ test:do_catchsql_test(
 		-- <sql-errors-1.12>
 		1,"Can't create or modify index 'I12' in space 'V0': views can not be indexed"
 		-- </sql-errors-1.12>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.13",
+	[[
+		SELECT 9223372036854775808;
+	]], {
+		-- <sql-errors-1.13>
+		1,"Integer literal 9223372036854775808 exceeds the supported range -9223372036854775808 - 9223372036854775807"
+		-- </sql-errors-1.13>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.14",
+	[[
+		SELECT 0x10000000000000000;
+	]], {
+		-- <sql-errors-1.14>
+		1,"Hex literal 0x10000000000000000 length 17 exceeds the supported limit (16)"
+		-- </sql-errors-1.14>
 	})
 
 test:finish_test()
