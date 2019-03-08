@@ -332,7 +332,7 @@ test:do_catchsql_test(
         DROP VIEW t1;
     ]], {
         -- <view-4.1>
-        1, "use DROP TABLE to delete table T1"
+        1, "Can't drop space 'T1': use DROP TABLE"
         -- </view-4.1>
     })
 
@@ -352,7 +352,7 @@ test:do_catchsql_test(
         DROP TABLE v1;
     ]], {
         -- <view-4.3>
-        1, "use DROP VIEW to delete view V1"
+        1, "Can't drop space 'V1': use DROP VIEW"
         -- </view-4.3>
     })
 

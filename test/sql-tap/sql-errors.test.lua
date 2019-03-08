@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(7)
+test:plan(9)
 
 test:do_catchsql_test(
 	"sql-errors-1.1",
@@ -78,6 +78,29 @@ test:do_catchsql_test(
 		-- <sql-errors-1.7>
 		1,"Failed to create space 'V7': number of aliases doesn't match provided columns"
 		-- </sql-errors-1.7>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.8",
+	[[
+		CREATE TABLE t8 (i INT PRIMARY KEY);
+		DROP VIEW t8;
+	]], {
+		-- <sql-errors-1.8>
+		1,"Can't drop space 'T8': use DROP TABLE"
+		-- </sql-errors-1.8>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.9",
+	[[
+		CREATE TABLE t9 (i INT PRIMARY KEY);
+		CREATE VIEW v9 AS SELECT * FROM t9;
+		DROP TABLE v9;
+	]], {
+		-- <sql-errors-1.8>
+		1,"Can't drop space 'V9': use DROP VIEW"
+		-- </sql-errors-1.8>
 	})
 
 test:finish_test()
