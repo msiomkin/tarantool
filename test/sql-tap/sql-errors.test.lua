@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(11)
+test:plan(12)
 
 test:execsql([[
 	CREATE TABLE t0 (i INT PRIMARY KEY);
@@ -120,6 +120,16 @@ test:do_catchsql_test(
 		-- <sql-errors-1.11>
 		1,"Failed to create space 'V11': parameters are not allowed in views"
 		-- </sql-errors-1.11>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.12",
+	[[
+		CREATE INDEX i12 ON v0(i);
+	]], {
+		-- <sql-errors-1.12>
+		1,"Can't create or modify index 'I12' in space 'V0': views can not be indexed"
+		-- </sql-errors-1.12>
 	})
 
 test:finish_test()
