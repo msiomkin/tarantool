@@ -303,11 +303,11 @@ box.info.replication[1].upstream.status
 ---
 - follow
 ...
-box.info.replication[1].upstream.lag > 0
+test_run:wait_cond(function() return box.info.replication[1].upstream.lag > 0 end, 10)
 ---
 - true
 ...
-box.info.replication[1].upstream.lag < 1
+test_run:wait_cond(function() return box.info.replication[1].upstream.lag < 1 end, 10)
 ---
 - true
 ...
@@ -383,7 +383,7 @@ while box.info.replication[1].upstream ~= nil do fiber.sleep(0.0001) end
 ---
 ...
 -- reconnect
-box.cfg{replication = old_repl}
+box.cfg{replication = old_repl, replication_timeout = 10, replication_connect_timeout = 20}
 ---
 ...
 while box.info.replication[1].upstream.status ~= 'disconnected' do fiber.sleep(0.0001) end
@@ -485,16 +485,16 @@ fiber = require('fiber')
 while box.info.replication[1].upstream.status ~= 'follow' do fiber.sleep(0.0001) end
 ---
 ...
-box.info.replication[1].upstream.status -- follow
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end, 10)
 ---
-- follow
+- true
 ...
 for i = 0, 15 do fiber.sleep(0.01) if box.info.replication[1].upstream.status ~= 'follow' then break end end
 ---
 ...
-box.info.replication[1].upstream.status -- follow
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end, 10)
 ---
-- follow
+- true
 ...
 test_run:cmd("switch default")
 ---

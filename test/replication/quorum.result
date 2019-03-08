@@ -5,7 +5,7 @@ SERVERS = {'quorum1', 'quorum2', 'quorum3'}
 ---
 ...
 -- Deploy a cluster.
-test_run:create_cluster(SERVERS, "replication", {args="0.1"})
+test_run:create_cluster(SERVERS, "replication", {args="20 50"})
 ---
 ...
 test_run:wait_fullmesh(SERVERS)
@@ -28,9 +28,9 @@ test_run:cmd('switch quorum2')
 - true
 ...
 test_run:cmd('restart server quorum2 with args="0.1 0.5"')
-box.info.status -- orphan
+test_run:wait_cond(function() return box.info.status == 'orphan' end, 10)
 ---
-- orphan
+- true
 ...
 box.ctl.wait_rw(0.001) -- timeout
 ---
@@ -47,14 +47,14 @@ box.space.test:replace{100} -- error
 box.cfg{replication={}}
 ---
 ...
-box.info.status -- running
+test_run:wait_cond(function() return box.info.status == 'running' end, 10)
 ---
-- running
+- true
 ...
 test_run:cmd('restart server quorum2 with args="0.1 0.5"')
-box.info.status -- orphan
+test_run:wait_cond(function() return box.info.status == 'orphan' end, 10)
 ---
-- orphan
+- true
 ...
 box.ctl.wait_rw(0.001) -- timeout
 ---
@@ -78,14 +78,14 @@ box.info.ro -- false
 ---
 - false
 ...
-box.info.status -- running
+test_run:wait_cond(function() return box.info.status == 'running' end, 10)
 ---
-- running
+- true
 ...
 test_run:cmd('restart server quorum2 with args="0.1 0.5"')
-box.info.status -- orphan
+test_run:wait_cond(function() return box.info.status == 'orphan' end, 10)
 ---
-- orphan
+- true
 ...
 box.ctl.wait_rw(0.001) -- timeout
 ---
@@ -110,20 +110,20 @@ box.info.ro -- false
 ---
 - false
 ...
-box.info.status -- running
+test_run:wait_cond(function() return box.info.status == 'running' end, 10)
 ---
-- running
+- true
 ...
 -- Check that the replica follows all masters.
-box.info.id == 1 or box.info.replication[1].upstream.status == 'follow'
+test_run:wait_cond(function() return box.info.id == 1 or box.info.replication[1].upstream.status == 'follow' end, 10)
 ---
 - true
 ...
-box.info.id == 2 or box.info.replication[2].upstream.status == 'follow'
+test_run:wait_cond(function() return box.info.id == 2 or box.info.replication[2].upstream.status == 'follow' end, 10)
 ---
 - true
 ...
-box.info.id == 3 or box.info.replication[3].upstream.status == 'follow'
+test_run:wait_cond(function() return box.info.id == 3 or box.info.replication[3].upstream.status == 'follow' end, 10)
 ---
 - true
 ...
@@ -158,7 +158,7 @@ fiber = require('fiber')
 fiber.sleep(0.1)
 ---
 ...
-test_run:cmd('start server quorum1 with args="0.1  0.5"')
+test_run:cmd('start server quorum1 with args="0.1 0.5"')
 ---
 - true
 ...
@@ -224,13 +224,6 @@ test_run:cmd('switch quorum3')
 fiber = require('fiber')
 ---
 ...
-while box.info.replication[4].upstream.status ~= 'follow' do fiber.sleep(0.001) end
----
-...
-box.info.replication[4].upstream.status
----
-- follow
-...
 -- Cleanup.
 test_run:cmd('switch default')
 ---
@@ -268,9 +261,9 @@ test_run:cmd("switch replica")
 ---
 - true
 ...
-box.info.status -- running
+test_run:wait_cond(function() return box.info.status == 'running' end, 10)
 ---
-- running
+- true
 ...
 box.space.test:select()
 ---
@@ -298,9 +291,9 @@ test_run:cmd("switch replica")
 ---
 - true
 ...
-box.info.status -- running
+test_run:wait_cond(function() return box.info.status == 'running' end, 10)
 ---
-- running
+- true
 ...
 test_run:cmd("switch default")
 ---
@@ -324,9 +317,9 @@ test_run:cmd("switch replica")
 ---
 - true
 ...
-box.info.status -- running
+test_run:wait_cond(function() return box.info.status == 'running' end, 10)
 ---
-- running
+- true
 ...
 box.space.test:select()
 ---
@@ -356,7 +349,7 @@ SERVERS = {'master_quorum1', 'master_quorum2'}
 ---
 ...
 -- Deploy a cluster.
-test_run:create_cluster(SERVERS, "replication", {args="0.1"})
+test_run:create_cluster(SERVERS, "replication", {args="20 50"})
 ---
 ...
 test_run:wait_fullmesh(SERVERS)

@@ -47,7 +47,7 @@ box.schema.user.revoke('guest', 'replication')
 -- gh-2682 on_replace on slave server with data change
 
 SERVERS = { 'on_replace1', 'on_replace2' }
-test_run:create_cluster(SERVERS, "replication", {args="0.2"})
+test_run:create_cluster(SERVERS, "replication", {args="20 50"})
 test_run:wait_fullmesh(SERVERS)
 
 test_run:cmd('switch on_replace1')

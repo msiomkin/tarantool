@@ -36,34 +36,34 @@ test_run:cmd('delete server test')
 test_run:cleanup_cluster()
 
 -- gh-3160 - Send heartbeats if there are changes from a remote master only
-SERVERS = { 'autobootstrap1', 'autobootstrap2', 'autobootstrap3' }
+SERVERS = { 'misc1', 'misc2', 'misc3' }
 
 -- Deploy a cluster.
-test_run:create_cluster(SERVERS, "replication", {args="0.1"})
+test_run:create_cluster(SERVERS, "replication", {args="20 50"})
 test_run:wait_fullmesh(SERVERS)
-test_run:cmd("switch autobootstrap1")
+test_run:cmd("switch misc1")
 test_run = require('test_run').new()
-box.cfg{replication_timeout = 0.01, replication_connect_timeout=0.01}
-test_run:cmd("switch autobootstrap2")
+box.cfg{replication_timeout = 0.03, replication_connect_timeout=0.03}
+test_run:cmd("switch misc2")
 test_run = require('test_run').new()
-box.cfg{replication_timeout = 0.01, replication_connect_timeout=0.01}
-test_run:cmd("switch autobootstrap3")
+box.cfg{replication_timeout = 0.03, replication_connect_timeout=0.03}
+test_run:cmd("switch misc3")
 test_run = require('test_run').new()
 fiber=require('fiber')
-box.cfg{replication_timeout = 0.01, replication_connect_timeout=0.01}
+box.cfg{replication_timeout = 0.03, replication_connect_timeout=0.03}
 _ = box.schema.space.create('test_timeout'):create_index('pk')
 test_run:cmd("setopt delimiter ';'")
 function wait_follow(replicaA, replicaB)
     return test_run:wait_cond(function()
         return replicaA.status ~= 'follow' or replicaB.status ~= 'follow'
-    end, 0.01)
+    end, 0.1)
 end ;
 function test_timeout()
     local replicaA = box.info.replication[1].upstream or box.info.replication[2].upstream
     local replicaB = box.info.replication[3].upstream or box.info.replication[2].upstream
     local follows = test_run:wait_cond(function()
         return replicaA.status == 'follow' or replicaB.status == 'follow'
-    end, 0.1)
+    end, 1)
     if not follows then error('replicas not in follow status') end
     for i = 0, 99 do 
         box.space.test_timeout:replace({1})
@@ -78,7 +78,7 @@ test_timeout()
 
 -- gh-3247 - Sequence-generated value is not replicated in case
 -- the request was sent via iproto.
-test_run:cmd("switch autobootstrap1")
+test_run:cmd("switch misc1")
 net_box = require('net.box')
 _ = box.schema.space.create('space1')
 _ = box.schema.sequence.create('seq')
@@ -89,11 +89,11 @@ c = net_box.connect(box.cfg.listen)
 c.space.space1:insert{box.NULL, "data"} -- fails, but bumps sequence value
 c.space.space1:insert{box.NULL, 1, "data"}
 box.space.space1:select{}
-vclock = test_run:get_vclock("autobootstrap1")
-_ = test_run:wait_vclock("autobootstrap2", vclock)
-test_run:cmd("switch autobootstrap2")
+vclock = test_run:get_vclock("misc1")
+_ = test_run:wait_vclock("misc2", vclock)
+test_run:cmd("switch misc2")
 box.space.space1:select{}
-test_run:cmd("switch autobootstrap1")
+test_run:cmd("switch misc1")
 box.space.space1:drop()
 
 test_run:cmd("switch default")
@@ -166,7 +166,7 @@ fiber.sleep(0.1)
 box.schema.user.create('cluster', {password='pass'})
 box.schema.user.grant('cluster', 'replication')
 
-while box.info.replication[2] == nil do fiber.sleep(0.01) end
+while box.info.replication[2] == nil do fiber.sleep(0.03) end
 vclock = test_run:get_vclock('default')
 _ = test_run:wait_vclock('replica_auth', vclock)
 
@@ -194,12 +194,12 @@ listen = box.cfg.listen
 box.cfg{listen = ''}
 
 test_run:cmd("switch replica")
-box.cfg{replication_connect_quorum = 0, replication_connect_timeout = 0.01}
+box.cfg{replication_connect_quorum = 0, replication_connect_timeout = 0.03}
 box.cfg{replication = {replication, replication}}
 
 test_run:cmd("switch default")
 box.cfg{listen = listen}
-while test_run:grep_log('replica', 'duplicate connection') == nil do fiber.sleep(0.01) end
+while test_run:grep_log('replica', 'duplicate connection') == nil do fiber.sleep(0.03) end
 
 test_run:cmd("stop server replica")
 test_run:cmd("cleanup server replica")
@@ -258,7 +258,7 @@ _ = box.space._schema:replace{'cluster', tostring(uuid.new())}
 -- master believes replica is in cluster, but their cluster UUIDs differ.
 test_run:cmd("start server replica")
 test_run:wait_log("replica", "REPLICASET_UUID_MISMATCH", nil, 1.0)
-box.info.replication[2].downstream.status
+test_run:wait_cond(function() return box.info.replication[2].downstream.status == 'stopped' end, 10)
 
 test_run:cmd("stop server replica")
 test_run:cmd("cleanup server replica")

@@ -193,7 +193,7 @@ test_run:cmd('switch default')
 t1 = fiber.time()
 test_run:cmd("stop server test")
 t2 = fiber.time()
-t2 - t1 < 1
+test_run:wait_cond(function() return t2 - t1 < 1 end, 500)
 test_run:cmd("cleanup server test")
 
 s = box.schema.space.create('test', {engine = 'vinyl'})

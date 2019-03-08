@@ -44,7 +44,7 @@ _ = fiber.create(repl_f)
 replica_set.join(test_run, 1)
 ---
 ...
-test_run:cmd("switch replica1")
+test_run:cmd("switch vreplica1")
 ---
 - true
 ...
@@ -63,14 +63,18 @@ errinj.set("ERRINJ_RELAY_FINAL_SLEEP", false)
 ---
 - ok
 ...
-test_run:cmd("switch replica1")
+test_run:cmd("switch vreplica1")
+---
+- true
+...
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end, 100)
 ---
 - true
 ...
 cnt = box.space.test.index[0]:count()
 ---
 ...
-box.space.test.index.primary:max()[1] == cnt - 1
+test_run:wait_cond(function() return box.space.test.index.primary:max()[1] == cnt - 1 end, 100)
 ---
 - true
 ...

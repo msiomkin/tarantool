@@ -702,9 +702,9 @@ _ = s:insert{30}
 _ = s:insert{40}
 ---
 ...
-gap_lock_count() -- 0
+test_run:wait_cond(function() return gap_lock_count() == 0 end, 500)
 ---
-- 0
+- true
 ...
 c:begin()
 ---

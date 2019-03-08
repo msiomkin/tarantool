@@ -222,7 +222,7 @@ master.uuid == box.space._cluster:get(master_id)[2]
 ---
 - true
 ...
-master.upstream.status == "follow"
+test_run:wait_cond(function() return master.upstream.status == 'follow' end, 50)
 ---
 - true
 ...
@@ -234,9 +234,9 @@ master.upstream.idle < 1
 ---
 - true
 ...
-master.upstream.peer:match("localhost")
+master.upstream.peer:match("unix/")
 ---
-- localhost
+- unix/
 ...
 master.downstream == nil
 ---
@@ -305,7 +305,7 @@ test_run:cmd('switch replica')
 r = box.info.replication[1]
 ---
 ...
-r.upstream.status == "stopped"
+test_run:wait_cond(function() return r.upstream.status == 'stopped' end, 50)
 ---
 - true
 ...
@@ -348,7 +348,7 @@ test_run:cmd("set variable master_port to 'replica.master'")
 replica_uri = os.getenv("LISTEN")
 ---
 ...
-box.cfg{replication = {"guest@localhost:" .. master_port, replica_uri}}
+box.cfg{replication = {"guest@unix/:" .. master_port, replica_uri}}
 ---
 ...
 master_id = test_run:get_server_id('default')
@@ -369,9 +369,9 @@ master.upstream.peer:match("guest")
 ---
 - guest
 ...
-master.upstream.peer:match("localhost")
+master.upstream.peer:match("unix/")
 ---
-- localhost
+- unix/
 ...
 master.downstream == nil
 ---

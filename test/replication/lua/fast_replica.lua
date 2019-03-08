@@ -4,11 +4,11 @@ function join(inspector, n)
     for i=1,n do
         local rid = tostring(i)
         os.execute('mkdir -p tmp')
-        os.execute('cp '..path..'/test/replication/replica.lua ./tmp/replica'..rid..'.lua')
-        os.execute('chmod +x ./tmp/replica'..rid..'.lua')
+        os.execute('cp '..path..'/test/replication/replica.lua ./tmp/vreplica'..rid..'.lua')
+        os.execute('chmod +x ./tmp/vreplica'..rid..'.lua')
         local out_dir = box.cfg.wal_dir
-        inspector:cmd("create server replica"..rid.." with rpl_master=default, script='"..out_dir.."/../tmp/replica"..rid..".lua'")
-        inspector:cmd("start server replica"..rid)
+        inspector:cmd("create server vreplica"..rid.." with rpl_master=default, script='"..out_dir.."/../tmp/vreplica"..rid..".lua'")
+        inspector:cmd("start server vreplica"..rid)
     end
 end
 
@@ -28,20 +28,20 @@ function unregister(inspector, id)
 end
 
 function start(inspector, id)
-    inspector:cmd('start server replica'..tostring(id - 1))
+    inspector:cmd('start server vreplica'..tostring(id - 1))
 end
 
 function stop(inspector, id)
-    inspector:cmd('stop server replica'..tostring(id - 1))
+    inspector:cmd('stop server vreplica'..tostring(id - 1))
 end
 
 function wait(inspector, id)
-    inspector:wait_lsn('replica'..tostring(id - 1), 'default')
+    inspector:wait_lsn('vreplica'..tostring(id - 1), 'default')
 end
 
 function delete(inspector, id)
-    inspector:cmd('stop server replica'..tostring(id - 1))
-    inspector:cmd('delete server replica'..tostring(id - 1))
+    inspector:cmd('stop server vreplica'..tostring(id - 1))
+    inspector:cmd('delete server vreplica'..tostring(id - 1))
 end
 
 function drop(inspector, id)

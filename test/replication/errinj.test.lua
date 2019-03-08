@@ -129,8 +129,8 @@ test_run:cmd("switch replica")
 -- wait for reconnect
 while box.info.replication[1].upstream.status ~= 'follow' do fiber.sleep(0.0001) end
 box.info.replication[1].upstream.status
-box.info.replication[1].upstream.lag > 0
-box.info.replication[1].upstream.lag < 1
+test_run:wait_cond(function() return box.info.replication[1].upstream.lag > 0 end, 10)
+test_run:wait_cond(function() return box.info.replication[1].upstream.lag < 1 end, 10)
 -- wait for ack timeout
 while box.info.replication[1].upstream.message ~= 'timed out' do fiber.sleep(0.0001) end
 
@@ -160,7 +160,7 @@ old_repl = box.cfg.replication
 box.cfg{replication = {}, replication_timeout = 0.1}
 while box.info.replication[1].upstream ~= nil do fiber.sleep(0.0001) end
 -- reconnect
-box.cfg{replication = old_repl}
+box.cfg{replication = old_repl, replication_timeout = 10, replication_connect_timeout = 20}
 while box.info.replication[1].upstream.status ~= 'disconnected' do fiber.sleep(0.0001) end
 while box.info.replication[1].upstream.status ~= 'follow' do fiber.sleep(0.0001) end
 
@@ -203,9 +203,9 @@ test_run:cmd("switch replica_timeout")
 
 fiber = require('fiber')
 while box.info.replication[1].upstream.status ~= 'follow' do fiber.sleep(0.0001) end
-box.info.replication[1].upstream.status -- follow
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end, 10)
 for i = 0, 15 do fiber.sleep(0.01) if box.info.replication[1].upstream.status ~= 'follow' then break end end
-box.info.replication[1].upstream.status -- follow
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end, 10)
 
 test_run:cmd("switch default")
 test_run:cmd("stop server replica_timeout")

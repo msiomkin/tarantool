@@ -8,7 +8,7 @@ SERVERS = { 'autobootstrap1', 'autobootstrap2', 'autobootstrap3' }
 --
 -- Start servers
 --
-test_run:create_cluster(SERVERS, "replication", {args="0.1"})
+test_run:create_cluster(SERVERS, "replication", {args="20 50"})
 
 --
 -- Wait for full mesh

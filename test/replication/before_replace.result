@@ -10,11 +10,11 @@ test_run = env.new()
 engine = test_run:get_cfg('engine')
 ---
 ...
-SERVERS = { 'autobootstrap1', 'autobootstrap2', 'autobootstrap3' }
+SERVERS = { 'before_replace1', 'before_replace2', 'before_replace3' }
 ---
 ...
 -- Deploy a cluster.
-test_run:create_cluster(SERVERS, "replication", {args="0.1"})
+test_run:create_cluster(SERVERS, "replication", {args="20 50"})
 ---
 ...
 test_run:wait_fullmesh(SERVERS)
@@ -26,7 +26,7 @@ test_run:cmd("setopt delimiter ';'")
 ---
 - true
 ...
-test_run:cmd("switch autobootstrap1");
+test_run:cmd("switch before_replace1");
 ---
 - true
 ...
@@ -37,7 +37,7 @@ _ = box.space.test:before_replace(function(old, new)
 end);
 ---
 ...
-test_run:cmd("switch autobootstrap2");
+test_run:cmd("switch before_replace2");
 ---
 - true
 ...
@@ -48,7 +48,7 @@ _ = box.space.test:before_replace(function(old, new)
 end);
 ---
 ...
-test_run:cmd("switch autobootstrap3");
+test_run:cmd("switch before_replace3");
 ---
 - true
 ...
@@ -75,7 +75,7 @@ test_run:cmd("setopt delimiter ''");
 ...
 -- Stall replication and generate incompatible data
 -- on the replicas.
-test_run:cmd("switch autobootstrap1")
+test_run:cmd("switch before_replace1")
 ---
 - true
 ...
@@ -86,7 +86,7 @@ box.error.injection.set('ERRINJ_RELAY_TIMEOUT', 0.01)
 for i = 1, 10 do box.space.test:replace{i, i % 3 == 1 and i * 10 or i} end
 ---
 ...
-test_run:cmd("switch autobootstrap2")
+test_run:cmd("switch before_replace2")
 ---
 - true
 ...
@@ -97,7 +97,7 @@ box.error.injection.set('ERRINJ_RELAY_TIMEOUT', 0.01)
 for i = 1, 10 do box.space.test:replace{i, i % 3 == 2 and i * 10 or i} end
 ---
 ...
-test_run:cmd("switch autobootstrap3")
+test_run:cmd("switch before_replace3")
 ---
 - true
 ...
@@ -121,7 +121,7 @@ vclock2 = test_run:wait_cluster_vclock(SERVERS, vclock)
 ...
 -- Check that all replicas converged to the same data
 -- and the state persists after restart.
-test_run:cmd("switch autobootstrap1")
+test_run:cmd("switch before_replace1")
 ---
 - true
 ...
@@ -138,7 +138,7 @@ box.space.test:select()
   - [9, 90]
   - [10, 100]
 ...
-test_run:cmd('restart server autobootstrap1 with args="0.1 0.5"')
+test_run:cmd('restart server before_replace1 with args="0.1 0.5"')
 box.space.test:select()
 ---
 - - [1, 10]
@@ -152,7 +152,7 @@ box.space.test:select()
   - [9, 90]
   - [10, 100]
 ...
-test_run:cmd("switch autobootstrap2")
+test_run:cmd("switch before_replace2")
 ---
 - true
 ...
@@ -169,7 +169,7 @@ box.space.test:select()
   - [9, 90]
   - [10, 100]
 ...
-test_run:cmd('restart server autobootstrap2 with args="0.1 0.5"')
+test_run:cmd('restart server before_replace2 with args="0.1 0.5"')
 box.space.test:select()
 ---
 - - [1, 10]
@@ -183,7 +183,7 @@ box.space.test:select()
   - [9, 90]
   - [10, 100]
 ...
-test_run:cmd("switch autobootstrap3")
+test_run:cmd("switch before_replace3")
 ---
 - true
 ...
@@ -204,7 +204,7 @@ push_err
 ---
 - Session 'applier' does not support push()
 ...
-test_run:cmd('restart server autobootstrap3 with args="0.1 0.5"')
+test_run:cmd('restart server before_replace3 with args="0.1 0.5"')
 box.space.test:select()
 ---
 - - [1, 10]

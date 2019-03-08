@@ -6,17 +6,17 @@
 test_run = require('test_run').new()
 ---
 ...
-SERVERS = {'master_quorum1', 'master_quorum2'}
+SERVERS = {'show_error_quorum1', 'show_error_quorum2'}
 ---
 ...
 -- Deploy a cluster.
-test_run:create_cluster(SERVERS)
+test_run:create_cluster(SERVERS, "replication", {args="20 50"})
 ---
 ...
 test_run:wait_fullmesh(SERVERS)
 ---
 ...
-test_run:cmd("switch master_quorum1")
+test_run:cmd("switch show_error_quorum1")
 ---
 - true
 ...
@@ -26,7 +26,7 @@ repl = box.cfg.replication
 box.cfg{replication = ""}
 ---
 ...
-test_run:cmd("switch master_quorum2")
+test_run:cmd("switch show_error_quorum2")
 ---
 - true
 ...
@@ -46,7 +46,7 @@ box.snapshot()
 ---
 - ok
 ...
--- Manually remove all xlogs on master_quorum2 to break replication to master_quorum1.
+-- Manually remove all xlogs on show_error_quorum2 to break replication to show_error_quorum1.
 fio = require('fio')
 ---
 ...
@@ -58,7 +58,7 @@ box.space.test:insert{3}
 - [3]
 ...
 -- Check error reporting.
-test_run:cmd("switch master_quorum1")
+test_run:cmd("switch show_error_quorum1")
 ---
 - true
 ...
@@ -75,15 +75,15 @@ box.space.test:select()
 other_id = box.info.id % 2 + 1
 ---
 ...
-box.info.replication[other_id].upstream.status
+test_run:wait_cond(function() return box.info.replication[other_id].upstream.status == 'stopped' end, 10)
 ---
-- stopped
+- true
 ...
 box.info.replication[other_id].upstream.message:match("Missing")
 ---
 - Missing
 ...
-test_run:cmd("switch master_quorum2")
+test_run:cmd("switch show_error_quorum2")
 ---
 - true
 ...
@@ -96,17 +96,17 @@ box.space.test:select()
 other_id = box.info.id % 2 + 1
 ---
 ...
-box.info.replication[other_id].upstream.status
+test_run:wait_cond(function() return box.info.replication[other_id].upstream.status == 'follow' end, 10)
 ---
-- follow
+- true
 ...
 box.info.replication[other_id].upstream.message
 ---
 - null
 ...
-box.info.replication[other_id].downstream.status
+test_run:wait_cond(function() return box.info.replication[other_id].downstream.status == 'stopped' end, 10)
 ---
-- stopped
+- true
 ...
 box.info.replication[other_id].downstream.message:match("Missing")
 ---

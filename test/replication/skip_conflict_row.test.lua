@@ -11,22 +11,23 @@ test_run:cmd("create server replica with rpl_master=default, script='replication
 test_run:cmd("start server replica")
 test_run:cmd("switch replica")
 box.cfg{replication_skip_conflict = true}
+box.ctl.wait_rw() -- success
 box.space.test:insert{1}
 
 test_run:cmd("switch default")
 space:insert{1, 1}
 space:insert{2}
-box.info.status
+test_run:wait_cond(function() return box.info.status == 'running' end, 10)
 
 vclock = test_run:get_vclock('default')
 _ = test_run:wait_vclock("replica", vclock)
 test_run:cmd("switch replica")
 box.info.replication[1].upstream.message
-box.info.replication[1].upstream.status
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end, 10)
 box.space.test:select()
 
 test_run:cmd("switch default")
-box.info.status
+test_run:wait_cond(function() return box.info.status == 'running' end, 10)
 
 -- gh-2283: test that if replication_skip_conflict is off vclock
 -- is not advanced on errors.
@@ -42,6 +43,7 @@ test_run:cmd("switch replica")
 lsn1 == box.info.vclock[1]
 box.info.replication[1].upstream.message
 box.info.replication[1].upstream.status
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'stopped' end, 10)
 test_run:cmd("switch default")
 test_run:cmd("restart server replica")
 -- applier is not in follow state
@@ -59,7 +61,7 @@ test_run:cmd("switch default")
 box.space.test:truncate()
 test_run:cmd("restart server replica")
 test_run:cmd("switch replica")
-box.info.replication[1].upstream.status
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end, 10)
 -- write some conflicting records on slave
 for i = 1, 10 do box.space.test:insert({i, 'r'}) end
 box.cfg{replication_skip_conflict = true}
@@ -70,10 +72,11 @@ test_run:cmd("switch default")
 for i = 1, 10 do box.space.test:insert({i, 'm'}) end
 
 test_run:cmd("switch replica")
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end, 10)
+
 -- lsn should be incremented
-v1 == box.info.vclock[1] - 10
--- and state is follow
-box.info.replication[1].upstream.status
+test_run:wait_cond(function() return v1 == box.info.vclock[1] - 10 end, 10)
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end, 10)
 
 -- restart server and check replication continues from nop-ed vclock
 test_run:cmd("switch default")

@@ -42,7 +42,7 @@ deps_ubuntu:
 test_ubuntu: deps_ubuntu
 	cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfoWError ${CMAKE_EXTRA_PARAMS}
 	make -j8
-	cd test && /usr/bin/python test-run.py -j 1
+	cd test && /usr/bin/python test-run.py --force
 
 deps_osx:
 	brew update
@@ -62,7 +62,7 @@ test_osx: deps_osx
 	curl --silent --show-error --retry 5 https://bootstrap.pypa.io/get-pip.py | python && \
 	pip --version && \
 	pip install -r test-run/requirements.txt && \
-	cd test && python test-run.py -j 1 unit/ app/ app-tap/ box/ box-tap/ && \
+	cd test && python test-run.py --force unit/ app/ app-tap/ box/ box-tap/ && \
 	deactivate
 
 coverage_ubuntu: deps_ubuntu

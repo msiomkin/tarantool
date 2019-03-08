@@ -229,7 +229,7 @@ _ = s:insert{20}
 _ = s:insert{30}
 _ = s:insert{40}
 
-gap_lock_count() -- 0
+test_run:wait_cond(function() return gap_lock_count() == 0 end, 500)
 
 c:begin()
 c("s:select({10}, {iterator = 'GE', limit = 4})") -- locks [10, 40]

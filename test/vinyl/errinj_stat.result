@@ -140,6 +140,9 @@ s:drop()
 box.stat.reset()
 ---
 ...
+box.cfg{too_long_threshold = 5}
+---
+...
 s = box.schema.space.create('test', {engine = 'vinyl'})
 ---
 ...
@@ -166,7 +169,7 @@ fiber.sleep(0.01)
 stat = box.stat.vinyl().scheduler
 ---
 ...
-stat.tasks_inprogress > 0
+test_run:wait_cond(function() return stat.tasks_inprogress > 0 end, 500)
 ---
 - true
 ...
@@ -196,7 +199,7 @@ c:get()
 stat = box.stat.vinyl().scheduler
 ---
 ...
-stat.tasks_inprogress == 0
+test_run:wait_cond(function() return stat.tasks_inprogress == 0 end, 500)
 ---
 - true
 ...
@@ -227,7 +230,7 @@ box.snapshot()
 stat = box.stat.vinyl().scheduler
 ---
 ...
-stat.tasks_inprogress == 0
+test_run:wait_cond(function() return stat.tasks_inprogress == 0 end, 500)
 ---
 - true
 ...
@@ -277,7 +280,7 @@ box.stat.vinyl().scheduler.dump_time == 0
 ---
 - true
 ...
-box.stat.vinyl().scheduler.compaction_time == 0
+test_run:wait_cond(function() return box.stat.vinyl().scheduler.compaction_time == 0 end, 500)
 ---
 - true
 ...
@@ -324,7 +327,7 @@ box.stat.vinyl().scheduler.dump_time == i:stat().disk.dump.time
 ---
 - true
 ...
-box.stat.vinyl().scheduler.compaction_time == i:stat().disk.compaction.time
+test_run:wait_cond(function() return box.stat.vinyl().scheduler.compaction_time == i:stat().disk.compaction.time end, 500)
 ---
 - true
 ...
@@ -363,7 +366,7 @@ i:stat().disk.compaction.time <= fiber.time() - start_time
 ---
 - true
 ...
-box.stat.vinyl().scheduler.compaction_time == i:stat().disk.compaction.time
+test_run:wait_cond(function() return box.stat.vinyl().scheduler.compaction_time == i:stat().disk.compaction.time end, 500)
 ---
 - true
 ...
@@ -382,7 +385,7 @@ box.stat.vinyl().scheduler.dump_time == 0
 ---
 - true
 ...
-box.stat.vinyl().scheduler.compaction_time == 0
+test_run:wait_cond(function() return box.stat.vinyl().scheduler.compaction_time == 0 end, 500)
 ---
 - true
 ...

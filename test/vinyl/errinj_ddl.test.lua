@@ -155,7 +155,7 @@ errinj.set("ERRINJ_VY_RUN_WRITE_DELAY", false)
 ch:get()
 
 s.index.sk:select()
-s.index.sk:stat().memory.rows
+test_run:wait_cond(function() return s.index.sk:stat().memory.rows == 27 end, 500)
 
 test_run:cmd('restart server default')
 
@@ -165,12 +165,12 @@ errinj = box.error.injection
 s = box.space.test
 
 s.index.sk:select()
-s.index.sk:stat().memory.rows
+test_run:wait_cond(function() return s.index.sk:stat().memory.rows == 27 end, 500)
 
 box.snapshot()
 
 s.index.sk:select()
-s.index.sk:stat().memory.rows
+test_run:wait_cond(function() return s.index.sk:stat().memory.rows == 0 end, 500)
 
 s:drop()
 

@@ -536,7 +536,7 @@ test_run:cmd("stop server test")
 t2 = fiber.time()
 ---
 ...
-t2 - t1 < 1
+test_run:wait_cond(function() return t2 - t1 < 1 end, 500)
 ---
 - true
 ...

@@ -1,5 +1,4 @@
-env = require('test_run')
-test_run = env.new()
+test_run = require('test_run').new()
 
 --
 -- Restart the server because need to reset quota used memory
@@ -74,7 +73,7 @@ box.cfg{vinyl_memory = 8 * 1024 * 1024}
 box.cfg.vinyl_memory
 
 for i = 1, count do s:replace{i, pad} end -- does not trigger dump
-box.stat.vinyl().memory.level0 > count * pad:len()
+test_run:wait_cond(function() return box.stat.vinyl().memory.level0 > count * pad:len() end, 500)
 
 box.cfg{vinyl_memory = 4 * 1024 * 1024} -- error: decreasing vinyl_memory is not allowed
 box.cfg.vinyl_memory

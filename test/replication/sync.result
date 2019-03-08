@@ -108,13 +108,13 @@ box.cfg{replication_sync_lag = 0.001}
 box.cfg{replication = replication}
 ---
 ...
+test_run:wait_cond(function() return box.info.status == 'running' end, 10)
+---
+- true
+...
 box.space.test:count()
 ---
 - 200
-...
-box.info.status -- running
----
-- running
 ...
 box.info.ro -- false
 ---
@@ -155,16 +155,16 @@ box.space.test:count() < 400
 ---
 - true
 ...
-box.info.status -- running
+test_run:wait_cond(function() return box.info.status == 'running' end, 10)
 ---
-- running
+- true
 ...
 box.info.ro -- false
 ---
 - false
 ...
 -- Wait for remaining rows to arrive.
-test_run:wait_cond(function() return box.space.test:count() == 400 end, 10)
+test_run:wait_cond(function() return box.space.test:count() == 400 end, 20)
 ---
 - true
 ...
@@ -203,16 +203,16 @@ box.space.test:count() < 600
 ---
 - true
 ...
-box.info.status -- orphan
+test_run:wait_cond(function() return box.info.status == 'orphan' end, 10)
 ---
-- orphan
+- true
 ...
 box.info.ro -- true
 ---
 - true
 ...
 -- Wait for remaining rows to arrive.
-test_run:wait_cond(function() return box.space.test:count() == 600 end, 10)
+test_run:wait_cond(function() return box.space.test:count() == 600 end, 100)
 ---
 - true
 ...
@@ -221,9 +221,9 @@ test_run:wait_cond(function() return box.info.status ~= 'orphan' end, 10)
 ---
 - true
 ...
-box.info.status -- running
+test_run:wait_cond(function() return box.info.status == 'running' end, 10)
 ---
-- running
+- true
 ...
 box.info.ro -- false
 ---
@@ -286,19 +286,19 @@ box.cfg{replication = {}}
 box.cfg{replication = replication}
 ---
 ...
-box.info.status -- running
+test_run:wait_cond(function() return box.info.status == 'running' end, 10)
 ---
-- running
+- true
 ...
 box.info.ro -- false
 ---
 - false
 ...
-box.info.replication[1].upstream.status -- follow
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end, 10)
 ---
-- follow
+- true
 ...
-test_run:grep_log('replica', 'ER_CFG.*')
+test_run:wait_log("replica", "ER_CFG.*", nil, 100)
 ---
 - 'ER_CFG: Incorrect value for option ''replication'': duplicate connection with the
   same replica UUID'
@@ -332,9 +332,9 @@ test_run:cmd("switch replica")
 ---
 - true
 ...
-box.info.status -- running
+test_run:wait_cond(function() return box.info.status == 'running' end, 10)
 ---
-- running
+- true
 ...
 box.info.ro -- false
 ---

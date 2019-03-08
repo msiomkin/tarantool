@@ -15,12 +15,12 @@ test_run:cmd("setopt delimiter ';'")
 function wait_gc(n)
     return test_run:wait_cond(function()
         return #box.info.gc().checkpoints == n
-    end, 10)
+    end, 50)
 end;
 function wait_xlog(n, timeout)
     return test_run:wait_cond(function()
         return #fio.glob('./master/*.xlog') == n
-    end, 10)
+    end, 50)
 end;
 test_run:cmd("setopt delimiter ''");
 
@@ -135,7 +135,7 @@ box.space.test:count()
 test_run:cmd("switch default")
 -- Now it's safe to drop the old xlog.
 wait_gc(1) or box.info.gc()
-wait_xlog(1) or fio.listdir('./master')
+test_run:wait_cond(function() return #fio.glob('./master/*.xlog') >= 1 end, 50) or fio.listdir('./master')
 -- Stop the replica.
 test_run:cmd("stop server replica")
 test_run:cmd("cleanup server replica")
@@ -150,7 +150,7 @@ box.snapshot()
 _ = s:auto_increment{}
 box.snapshot()
 wait_gc(1) or box.info.gc()
-wait_xlog(2) or fio.listdir('./master')
+test_run:wait_cond(function() return #fio.glob('./master/*.xlog') >= 2 end, 50) or fio.listdir('./master')
 
 -- The xlog should only be deleted after the replica
 -- is unregistered.
