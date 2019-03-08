@@ -646,6 +646,9 @@ resolveExprStep(Walker * pWalker, Expr * pExpr)
 			} else {
 				is_agg = pDef->xFinalize != 0;
 				pExpr->type = pDef->ret_type;
+				const char *err_msg =
+					"second argument to likelihood() must "\
+					"be a constant between 0.0 and 1.0";
 				if (pDef->funcFlags & SQL_FUNC_UNLIKELY) {
 					ExprSetProperty(pExpr,
 							EP_Unlikely | EP_Skip);
@@ -654,9 +657,11 @@ resolveExprStep(Walker * pWalker, Expr * pExpr)
 						    exprProbability(pList->a[1].
 								    pExpr);
 						if (pExpr->iTable < 0) {
-							sqlErrorMsg(pParse,
-									"second argument to likelihood() must be a "
-									"constant between 0.0 and 1.0");
+							diag_set(ClientError,
+								 ER_ILLEGAL_PARAMS,
+								 err_msg);
+							pParse->is_aborted =
+								true;
 							pNC->nErr++;
 						}
 					} else {
