@@ -189,7 +189,7 @@ test:do_catchsql_test(
         INSERT INTO v2 VALUES(1,2,3,4);
     ]], {
         -- <view-2.2>
-        1, "cannot modify V2 because it is a view"
+        1, "Can't modify space 'V2': it is a view"
         -- </view-2.2>
     })
 
@@ -199,7 +199,7 @@ test:do_catchsql_test(
         UPDATE v2 SET a=10 WHERE a=5;
     ]], {
         -- <view-2.3>
-        1, "cannot modify V2 because it is a view"
+        1, "Can't modify space 'V2': it is a view"
         -- </view-2.3>
     })
 
@@ -209,7 +209,7 @@ test:do_catchsql_test(
         DELETE FROM v2;
     ]], {
         -- <view-2.4>
-        1, "cannot modify V2 because it is a view"
+        1, "Can't modify space 'V2': it is a view"
         -- </view-2.4>
     })
 

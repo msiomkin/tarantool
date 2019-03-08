@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(22)
+test:plan(25)
 
 test:execsql([[
 	CREATE TABLE t0 (i INT PRIMARY KEY);
@@ -261,6 +261,36 @@ test:do_catchsql_test(
 		-- <sql-errors-1.22>
 		1,"SQL bind parameter limit reached: 65000"
 		-- </sql-errors-1.22>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.23",
+	[[
+		INSERT INTO v0 VALUES (2);
+	]], {
+		-- <sql-errors-1.23>
+		1,"Can't modify space 'V0': it is a view"
+		-- </sql-errors-1.23>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.24",
+	[[
+		UPDATE v0 SET i = 2 WHERE i = 1;
+	]], {
+		-- <sql-errors-1.24>
+		1,"Can't modify space 'V0': it is a view"
+		-- </sql-errors-1.24>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.25",
+	[[
+		DELETE FROM v0;
+	]], {
+		-- <sql-errors-1.25>
+		1,"Can't modify space 'V0': it is a view"
+		-- </sql-errors-1.25>
 	})
 
 test:finish_test()

@@ -322,8 +322,9 @@ sqlInsert(Parse * pParse,	/* Parser context */
 
 	/* Cannot insert into a read-only table. */
 	if (is_view && tmask == 0) {
-		sqlErrorMsg(pParse, "cannot modify %s because it is a view",
-				space_def->name);
+		diag_set(ClientError, ER_ALTER_SPACE, space->def->name,
+			 "it is a view");
+		pParse->is_aborted = true;
 		goto insert_cleanup;
 	}
 
