@@ -397,13 +397,19 @@ sqlJoinType(Parse * pParse, Token * pA, Token * pB, Token * pC)
 	}
 	if ((jointype & (JT_INNER | JT_OUTER)) == (JT_INNER | JT_OUTER) ||
 	    (jointype & JT_ERROR) != 0) {
-		const char *zSp = " ";
 		assert(pB != 0);
-		if (pC == 0) {
-			zSp++;
+		const char *err;
+		if (pC == NULL) {
+			err = tt_sprintf("unknown or unsupported join type: "\
+					 "%.*s %.*s", pA->n, pA->z, pB->n,
+					 pB->z);
+		} else {
+			err = tt_sprintf("unknown or unsupported join type: "\
+					 "%.*s %.*s %.*s", pA->n, pA->z, pB->n,
+					 pB->z, pC->n, pC->z);
 		}
-		sqlErrorMsg(pParse, "unknown or unsupported join type: "
-				"%T %T%s%T", pA, pB, zSp, pC);
+		diag_set(ClientError, ER_SQL_PARSER_GENERIC, err);
+		pParse->is_aborted = true;
 		jointype = JT_INNER;
 	} else if ((jointype & JT_OUTER) != 0
 		   && (jointype & (JT_LEFT | JT_RIGHT)) != JT_LEFT) {
@@ -590,9 +596,10 @@ sqlProcessJoin(Parse * pParse, Select * p)
 		 */
 		if (pRight->fg.jointype & JT_NATURAL) {
 			if (pRight->pOn || pRight->pUsing) {
-				sqlErrorMsg(pParse,
-						"a NATURAL join may not have "
-						"an ON or USING clause", 0);
+				diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+					 "a NATURAL join may not have "
+					 "an ON or USING clause");
+				pParse->is_aborted = true;
 				return 1;
 			}
 			for (j = 0; j < (int)right_space->def->field_count; j++) {
@@ -613,8 +620,10 @@ sqlProcessJoin(Parse * pParse, Select * p)
 		/* Disallow both ON and USING clauses in the same join
 		 */
 		if (pRight->pOn && pRight->pUsing) {
-			sqlErrorMsg(pParse, "cannot have both ON and USING "
-					"clauses in the same join");
+			diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+				 "cannot have both ON and USING clauses in "\
+				 "the same join");
+			pParse->is_aborted = true;
 			return 1;
 		}
 
@@ -637,6 +646,8 @@ sqlProcessJoin(Parse * pParse, Select * p)
 		 * not contained in both tables to be joined.
 		 */
 		if (pRight->pUsing) {
+			const char *err = "cannot join using column %s - "\
+					  "column not present in both tables";
 			IdList *pList = pRight->pUsing;
 			for (j = 0; j < pList->nId; j++) {
 				char *zName;	/* Name of the term in the USING clause */
@@ -650,10 +661,10 @@ sqlProcessJoin(Parse * pParse, Select * p)
 				    || !tableAndColumnIndex(pSrc, i + 1, zName,
 							    &iLeft, &iLeftCol)
 				    ) {
-					sqlErrorMsg(pParse,
-							"cannot join using column %s - column "
-							"not present in both tables",
-							zName);
+					err = tt_sprintf(err, zName);
+					diag_set(ClientError,
+						 ER_SQL_PARSER_GENERIC, err);
+					pParse->is_aborted = true;
 					return 1;
 				}
 				addWhereTerm(pParse, pSrc, iLeft, iLeftCol,
@@ -2601,16 +2612,20 @@ multiSelect(Parse * pParse,	/* Parsing context */
 	pPrior = p->pPrior;
 	dest = *pDest;
 	if (pPrior->pOrderBy) {
-		sqlErrorMsg(pParse,
-				"ORDER BY clause should come after %s not before",
-				selectOpName(p->op));
+		const char *err_msg =
+			tt_sprintf("ORDER BY clause should come after %s not "\
+				   "before", selectOpName(p->op));
+		diag_set(ClientError, ER_SQL_PARSER_GENERIC, err_msg);
+		pParse->is_aborted = true;
 		rc = 1;
 		goto multi_select_end;
 	}
 	if (pPrior->pLimit) {
-		sqlErrorMsg(pParse,
-				"LIMIT clause should come after %s not before",
-				selectOpName(p->op));
+		const char *err_msg =
+			tt_sprintf("LIMIT clause should come after %s not "\
+				   "before", selectOpName(p->op));
+		diag_set(ClientError, ER_SQL_PARSER_GENERIC, err_msg);
+		pParse->is_aborted = true;
 		rc = 1;
 		goto multi_select_end;
 	}
@@ -2987,19 +3002,6 @@ multiSelect(Parse * pParse,	/* Parsing context */
 	return rc;
 }
 #endif				/* SQL_OMIT_COMPOUND_SELECT */
-
-void
-sqlSelectWrongNumTermsError(struct Parse *parse, struct Select * p)
-{
-	if (p->selFlags & SF_Values) {
-		sqlErrorMsg(parse, "all VALUES must have the same number "\
-				"of terms");
-	} else {
-		sqlErrorMsg(parse, "SELECTs to the left and right of %s "
-				"do not have the same number of result columns",
-				selectOpName(p->op));
-	}
-}
 
 /**
  * Code an output subroutine for a coroutine implementation of a
@@ -3622,7 +3624,19 @@ substExpr(Parse * pParse,	/* Report errors here */
 			assert(pEList != 0 && pExpr->iColumn < pEList->nExpr);
 			assert(pExpr->pLeft == 0 && pExpr->pRight == 0);
 			if (sqlExprIsVector(pCopy)) {
-				sqlVectorErrorMsg(pParse, pCopy);
+				const char *err;
+				if (pCopy->flags & EP_xIsSelect) {
+					err = "sub-select returns %d columns "\
+					      "- expected 1";
+					int expr_count =
+						pCopy->x.pSelect->pEList->nExpr;
+					err = tt_sprintf(err, expr_count);
+				} else {
+					err = "row value misused";
+				}
+				diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+					 err);
+				pParse->is_aborted = true;
 			} else {
 				pNew = sqlExprDup(db, pCopy, 0);
 				if (pNew && (pExpr->flags & EP_FromJoin)) {
@@ -4518,21 +4532,6 @@ convertCompoundSelectToSubquery(Walker * pWalker, Select * p)
 	return WRC_Continue;
 }
 
-/*
- * Check to see if the FROM clause term pFrom has table-valued function
- * arguments.  If it does, leave an error message in pParse and return
- * non-zero, since pFrom is not allowed to be a table-valued function.
- */
-static int
-cannotBeFunction(Parse * pParse, struct SrcList_item *pFrom)
-{
-	if (pFrom->fg.isTabFunc) {
-		sqlErrorMsg(pParse, "'%s' is not a function", pFrom->zName);
-		return 1;
-	}
-	return 0;
-}
-
 #ifndef SQL_OMIT_CTE
 /*
  * Argument pWith (which may be NULL) points to a linked list of nested
@@ -4627,11 +4626,18 @@ withExpand(Walker * pWalker, struct SrcList_item *pFrom)
 		 * In this case, proceed.
 		 */
 		if (pCte->zCteErr) {
-			sqlErrorMsg(pParse, pCte->zCteErr, pCte->zName);
+			diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+				 tt_sprintf(pCte->zCteErr, pCte->zName));
+			pParse->is_aborted = true;
 			return SQL_ERROR;
 		}
-		if (cannotBeFunction(pParse, pFrom))
+		if (pFrom->fg.isTabFunc) {
+			const char *err = "'%s' is not a function";
+			diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+				 tt_sprintf(err, pFrom->zName));
+			pParse->is_aborted = true;
 			return SQL_ERROR;
+		}
 
 		assert(pFrom->space == NULL);
 		pFrom->space = sql_ephemeral_space_new(pParse, pCte->zName);
@@ -4663,9 +4669,11 @@ withExpand(Walker * pWalker, struct SrcList_item *pFrom)
 			}
 		}
 		if (ref_counter > 1) {
-			sqlErrorMsg(pParse,
-					"multiple references to recursive table: %s",
-					pCte->zName);
+			const char *err_msg =
+				tt_sprintf("multiple references to recursive "\
+					   "table: %s", pCte->zName);
+			diag_set(ClientError, ER_SQL_PARSER_GENERIC, err_msg);
+			pParse->is_aborted = true;
 			return SQL_ERROR;
 		}
 		assert(ref_counter == 0 ||
@@ -4681,10 +4689,13 @@ withExpand(Walker * pWalker, struct SrcList_item *pFrom)
 		pEList = pLeft->pEList;
 		if (pCte->pCols) {
 			if (pEList && pEList->nExpr != pCte->pCols->nExpr) {
-				sqlErrorMsg(pParse,
-						"table %s has %d values for %d columns",
-						pCte->zName, pEList->nExpr,
-						pCte->pCols->nExpr);
+				const char *err_msg =
+					tt_sprintf("table %s has %d values "\
+						   "for %d columns",
+						   pCte->zName, pEList->nExpr,
+						   pCte->pCols->nExpr);
+				diag_set(ClientError, ER_SQL_PARSER_GENERIC, err_msg);
+				pParse->is_aborted = true;
 				pParse->pWith = pSavedWith;
 				return SQL_ERROR;
 			}
@@ -4840,8 +4851,15 @@ selectExpander(Walker * pWalker, Select * p)
 			struct space *space = sql_lookup_space(pParse, pFrom);
 			if (space == NULL)
 				return WRC_Abort;
-			if (cannotBeFunction(pParse, pFrom))
+			if (pFrom->fg.isTabFunc) {
+				const char *err =
+					tt_sprintf("'%s' is not a function",
+						   pFrom->zName);
+				diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+					 err);
+				pParse->is_aborted = true;
 				return WRC_Abort;
+			}
 			if (space->def->opts.is_view) {
 				struct Select *select =
 					sql_view_compile(db, space->def->opts.sql);
@@ -5252,9 +5270,10 @@ resetAccumulator(Parse * pParse, AggInfo * pAggInfo)
 			Expr *pE = pFunc->pExpr;
 			assert(!ExprHasProperty(pE, EP_xIsSelect));
 			if (pE->x.pList == 0 || pE->x.pList->nExpr != 1) {
-				sqlErrorMsg(pParse,
-						"DISTINCT aggregates must have exactly one "
-						"argument");
+				diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+					 "DISTINCT aggregates must have "\
+					 "exactly one argument");
+				pParse->is_aborted = true;
 				pFunc->iDistinct = -1;
 			} else {
 				struct sql_key_info *key_info =

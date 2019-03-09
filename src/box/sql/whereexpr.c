@@ -1497,9 +1497,11 @@ sqlWhereTabFuncArgs(Parse * pParse,	/* Parsing context */
 		while (k < (int)space_def->field_count)
 			k++;
 		if (k >= (int)space_def->field_count) {
-			sqlErrorMsg(pParse,
-					"too many arguments on %s() - max %d",
-					space_def->name, j);
+			const char *err =
+				tt_sprintf("too many arguments on %s() - max "\
+					   "%d", space_def->name, j);
+			diag_set(ClientError, ER_SQL_PARSER_GENERIC, err);
+			pParse->is_aborted = true;
 			return;
 		}
 		pColRef = sqlExprAlloc(pParse->db, TK_COLUMN, 0, 0);

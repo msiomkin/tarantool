@@ -1210,13 +1210,14 @@ valueFromFunction(sql * db,	/* The database connection */
 	pFunc->xSFunc(&ctx, nVal, apVal);
 	if (ctx.isError) {
 		rc = ctx.isError;
-		sqlErrorMsg(pCtx->pParse, "%s", sql_value_text(pVal));
+		const char *err = "Error in function '%s': %s";
+		err = tt_sprintf(err, pFunc->zName, sql_value_text(pVal));
+		diag_set(ClientError, ER_SQL_PARSER_GENERIC, err);
+		pCtx->pParse->is_aborted = true;
 	} else {
 		sql_value_apply_type(pVal, type);
 		assert(rc == SQL_OK);
 	}
-	if (rc != SQL_OK)
-		pCtx->pParse->is_aborted = true;
 
  value_from_function_out:
 	if (rc != SQL_OK) {
