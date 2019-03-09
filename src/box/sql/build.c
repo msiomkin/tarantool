@@ -2256,7 +2256,12 @@ sql_create_index(struct Parse *parse, struct Token *token,
 		assert(col_list->nExpr == 1);
 		sqlExprListSetSortOrder(col_list, sort_order);
 	} else {
-		sqlExprListCheckLength(parse, col_list, "index");
+		if (col_list->nExpr > db->aLimit[SQL_LIMIT_COLUMN]) {
+			diag_set(ClientError, ER_SQL_PARSER_LIMIT,
+				 "The number of columns in index", 0, "",
+				 col_list->nExpr, db->aLimit[SQL_LIMIT_COLUMN]);
+			parse->is_aborted = true;
+		}
 	}
 
 	index = (struct index *) region_alloc(&parse->region, sizeof(*index));

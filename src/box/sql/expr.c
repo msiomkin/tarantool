@@ -1866,22 +1866,6 @@ sqlExprListSetSpan(Parse * pParse,	/* Parsing context */
 }
 
 /*
- * If the expression list pEList contains more than iLimit elements,
- * leave an error message in pParse.
- */
-void
-sqlExprListCheckLength(Parse * pParse,
-			   ExprList * pEList, const char *zObject)
-{
-	int mx = pParse->db->aLimit[SQL_LIMIT_COLUMN];
-	testcase(pEList && pEList->nExpr == mx);
-	testcase(pEList && pEList->nExpr == mx + 1);
-	if (pEList && pEList->nExpr > mx) {
-		sqlErrorMsg(pParse, "too many columns in %s", zObject);
-	}
-}
-
-/*
  * Delete an entire expression list.
  */
 static SQL_NOINLINE void

@@ -1,11 +1,15 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(29)
+test:plan(31)
 
 test:execsql([[
 	CREATE TABLE t0 (i INT PRIMARY KEY);
 	CREATE VIEW v0 AS SELECT * FROM t0;
 ]])
+format = {}
+for i = 1, 2001 do format[i] = {name = 'A' .. i, type = 'unsigned'} end
+s0 = box.schema.space.create('S0', {format = format})
+i0 = s0:create_index('I0')
 
 test:do_catchsql_test(
 	"sql-errors-1.1",
@@ -331,6 +335,32 @@ test:do_catchsql_test(
 		-- <sql-errors-1.29>
 		1,"Parameter markers are prohibited in an index definition"
 		-- </sql-errors-1.29>
+	})
+
+create_index_statement = 'CREATE INDEX i30 on t0(i'..string.rep(', i', 2000)..');'
+
+test:do_catchsql_test(
+	"sql-errors-1.30",
+	create_index_statement,
+	{
+		-- <sql-errors-1.30>
+		1,"The number of columns in index 2001 exceeds the limit (2000)"
+		-- </sql-errors-1.30>
+	})
+
+update_statement = 'UPDATE s0 SET a1 = a1 + 1'
+for i = 2, 2001 do
+	update_statement = update_statement .. ', a' .. i .. ' = a' .. i .. ' + 1'
+end
+update_statement = update_statement .. ';'
+
+test:do_catchsql_test(
+	"sql-errors-1.31",
+	update_statement,
+	{
+		-- <sql-errors-1.31>
+		1,"The number of columns in set list 2001 exceeds the limit (2000)"
+		-- </sql-errors-1.31>
 	})
 
 test:finish_test()

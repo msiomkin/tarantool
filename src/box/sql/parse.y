@@ -743,7 +743,11 @@ cmd ::= with(C) UPDATE orconf(R) fullname(X) indexed_opt(I) SET setlist(Y)
         where_opt(W).  {
   sqlWithPush(pParse, C, 1);
   sqlSrcListIndexedBy(pParse, X, &I);
-  sqlExprListCheckLength(pParse,Y,"set list");
+  if (Y->nExpr > pParse->db->aLimit[SQL_LIMIT_COLUMN]) {
+    diag_set(ClientError, ER_SQL_PARSER_LIMIT, "The number of columns in set "\
+             "list", 0, "", Y->nExpr, pParse->db->aLimit[SQL_LIMIT_COLUMN]);
+    pParse->is_aborted = true;
+  }
   sqlSubProgramsRemaining = SQL_MAX_COMPILING_TRIGGERS;
   /* Instruct SQL to initate Tarantool's transaction.  */
   pParse->initiateTTrans = true;
