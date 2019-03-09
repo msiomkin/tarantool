@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(36)
+test:plan(37)
 
 test:execsql([[
 	CREATE TABLE t0 (i INT PRIMARY KEY);
@@ -414,6 +414,16 @@ test:do_catchsql_test(
 		-- <sql-errors-1.36>
 		1,"Illegal parameters, second argument to likelihood() must be a constant between 0.0 and 1.0"
 		-- </sql-errors-1.36>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.37",
+	[[
+		CREATE TRIGGER r0 AFTER INSERT ON t0 BEGIN INSERT INTO t0.i VALUES (2); END;
+	]], {
+		-- <sql-errors-1.37>
+		1,"qualified table names are not allowed on INSERT, UPDATE, and DELETE statements within triggers"
+		-- </sql-errors-1.37>
 	})
 
 test:finish_test()

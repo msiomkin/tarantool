@@ -3914,7 +3914,9 @@ wherePathSolver(WhereInfo * pWInfo, LogEst nRowEst)
 	}
 
 	if (nFrom == 0) {
-		sqlErrorMsg(pParse, "no query solution");
+		diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+			 "no query solution");
+		pParse->is_aborted = true;
 		sqlDbFree(db, pSpace);
 		return SQL_ERROR;
 	}

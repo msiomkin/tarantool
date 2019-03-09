@@ -645,7 +645,9 @@ codeVectorCompare(Parse * pParse,	/* Code generator context */
 	int addrDone = sqlVdbeMakeLabel(v);
 
 	if (nLeft != sqlExprVectorSize(pRight)) {
-		sqlErrorMsg(pParse, "row value misused");
+		diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+			 "row value misused");
+		pParse->is_aborted = true;
 		return;
 	}
 	assert(pExpr->op == TK_EQ || pExpr->op == TK_NE
@@ -2651,7 +2653,9 @@ sqlVectorErrorMsg(Parse * pParse, Expr * pExpr)
 		sqlSubselectError(pParse, pExpr->x.pSelect->pEList->nExpr,
 				      1);
 	} else {
-		sqlErrorMsg(pParse, "row value misused");
+		diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+			 "row value misused");
+		pParse->is_aborted = true;
 	}
 }
 
@@ -4231,7 +4235,9 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 		}
 
 	case TK_VECTOR:{
-			sqlErrorMsg(pParse, "row value misused");
+			diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+				 "row value misused");
+			pParse->is_aborted = true;
 			break;
 		}
 
@@ -4331,8 +4337,9 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 		}
 	case TK_RAISE:
 		if (pParse->triggered_space == NULL) {
-			sqlErrorMsg(pParse, "RAISE() may only be used "
-					"within a trigger-program");
+			diag_set(ClientError, ER_SQL_PARSER_GENERIC, "RAISE() "\
+				 "may only be used within a trigger-program");
+			pParse->is_aborted = true;
 			return 0;
 		}
 		if (pExpr->on_conflict_action == ON_CONFLICT_ACTION_ABORT)

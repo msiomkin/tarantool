@@ -398,8 +398,10 @@ lookupName(Parse * pParse,	/* The parsing context */
 						return WRC_Abort;
 					}
 					if (sqlExprVectorSize(pOrig) != 1) {
-						sqlErrorMsg(pParse,
-								"row value misused");
+						diag_set(ClientError,
+							 ER_SQL_PARSER_GENERIC,
+							 "row value misused");
+						pParse->is_aborted = true;
 						return WRC_Abort;
 					}
 					resolveAlias(pParse, pEList, j, pExpr,
@@ -803,7 +805,9 @@ resolveExprStep(Walker * pWalker, Expr * pExpr)
 				testcase(pExpr->op == TK_GT);
 				testcase(pExpr->op == TK_GE);
 				testcase(pExpr->op == TK_BETWEEN);
-				sqlErrorMsg(pParse, "row value misused");
+				diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+					 "row value misused");
+				pParse->is_aborted = true;
 			}
 			break;
 		}
@@ -1425,12 +1429,15 @@ resolveSelectStep(Walker * pWalker, Select * p)
 			    || db->mallocFailed) {
 				return WRC_Abort;
 			}
+			const char *err_msg = "aggregate functions are not "\
+					      "allowed in the GROUP BY clause";
 			for (i = 0, pItem = pGroupBy->a; i < pGroupBy->nExpr;
 			     i++, pItem++) {
 				if (ExprHasProperty(pItem->pExpr, EP_Agg)) {
-					sqlErrorMsg(pParse,
-							"aggregate functions are not allowed in "
-							"the GROUP BY clause");
+					diag_set(ClientError,
+						 ER_SQL_PARSER_GENERIC,
+						 err_msg);
+					pParse->is_aborted = true;
 					return WRC_Abort;
 				}
 			}
@@ -1440,10 +1447,37 @@ resolveSelectStep(Walker * pWalker, Select * p)
 		 * number of expressions in the select list.
 		 */
 		if (p->pNext && p->pEList->nExpr != p->pNext->pEList->nExpr) {
-			sqlSelectWrongNumTermsError(pParse, p->pNext);
+			if (p->pNext->selFlags & SF_Values) {
+				diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+					 "all VALUES must have the same "\
+					 "number of terms");
+			} else {
+				const char *err_msg =
+					"SELECTs to the left and right of %s "\
+					"do not have the same number of "\
+					"result columns";
+				switch (p->pNext->op) {
+				case TK_ALL:
+					err_msg = tt_sprintf(err_msg,
+							     "UNION ALL");
+					break;
+				case TK_INTERSECT:
+					err_msg = tt_sprintf(err_msg,
+							     "INTERSECT");
+					break;
+				case TK_EXCEPT:
+					err_msg = tt_sprintf(err_msg, "EXCEPT");
+					break;
+				default:
+					err_msg = tt_sprintf(err_msg, "UNION");
+					break;
+				}
+				diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+					 err_msg);
+			}
+			pParse->is_aborted = true;
 			return WRC_Abort;
 		}
-
 		/* Advance to the next term of the compound
 		 */
 		p = p->pPrior;

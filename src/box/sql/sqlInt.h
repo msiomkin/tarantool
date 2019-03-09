@@ -4395,16 +4395,6 @@ void sqlExpirePreparedStatements(sql *);
 int sqlCodeSubselect(Parse *, Expr *, int);
 void sqlSelectPrep(Parse *, Select *, NameContext *);
 
-/**
- * Error message for when two or more terms of a compound select
- * have different size result sets.
- *
- * @param parse Parsing context.
- * @param p Select struct to analyze.
- */
-void
-sqlSelectWrongNumTermsError(struct Parse *parse, struct Select *p);
-
 int sqlMatchSpanName(const char *, const char *, const char *);
 int sqlResolveExprNames(NameContext *, Expr *);
 int sqlResolveExprListNames(NameContext *, ExprList *);

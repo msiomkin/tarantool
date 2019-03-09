@@ -590,9 +590,10 @@ sqlProcessJoin(Parse * pParse, Select * p)
 		 */
 		if (pRight->fg.jointype & JT_NATURAL) {
 			if (pRight->pOn || pRight->pUsing) {
-				sqlErrorMsg(pParse,
-						"a NATURAL join may not have "
-						"an ON or USING clause", 0);
+				diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+					 "a NATURAL join may not have "
+					 "an ON or USING clause");
+				pParse->is_aborted = true;
 				return 1;
 			}
 			for (j = 0; j < (int)right_space->def->field_count; j++) {
@@ -613,8 +614,10 @@ sqlProcessJoin(Parse * pParse, Select * p)
 		/* Disallow both ON and USING clauses in the same join
 		 */
 		if (pRight->pOn && pRight->pUsing) {
-			sqlErrorMsg(pParse, "cannot have both ON and USING "
-					"clauses in the same join");
+			diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+				 "cannot have both ON and USING clauses in "\
+				 "the same join");
+			pParse->is_aborted = true;
 			return 1;
 		}
 
@@ -2988,19 +2991,6 @@ multiSelect(Parse * pParse,	/* Parsing context */
 }
 #endif				/* SQL_OMIT_COMPOUND_SELECT */
 
-void
-sqlSelectWrongNumTermsError(struct Parse *parse, struct Select * p)
-{
-	if (p->selFlags & SF_Values) {
-		sqlErrorMsg(parse, "all VALUES must have the same number "\
-				"of terms");
-	} else {
-		sqlErrorMsg(parse, "SELECTs to the left and right of %s "
-				"do not have the same number of result columns",
-				selectOpName(p->op));
-	}
-}
-
 /**
  * Code an output subroutine for a coroutine implementation of a
  * SELECT statment.
@@ -5252,9 +5242,10 @@ resetAccumulator(Parse * pParse, AggInfo * pAggInfo)
 			Expr *pE = pFunc->pExpr;
 			assert(!ExprHasProperty(pE, EP_xIsSelect));
 			if (pE->x.pList == 0 || pE->x.pList->nExpr != 1) {
-				sqlErrorMsg(pParse,
-						"DISTINCT aggregates must have exactly one "
-						"argument");
+				diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+					 "DISTINCT aggregates must have "\
+					 "exactly one argument");
+				pParse->is_aborted = true;
 				pFunc->iDistinct = -1;
 			} else {
 				struct sql_key_info *key_info =

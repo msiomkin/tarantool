@@ -3044,11 +3044,13 @@ sqlWithAdd(Parse * pParse,	/* Parsing context */
 	zName = sqlNameFromToken(pParse->db, pName);
 	if (zName && pWith) {
 		int i;
+		const char *err_msg = "Ambiguous table name in WITH query: %s";
 		for (i = 0; i < pWith->nCte; i++) {
 			if (strcmp(zName, pWith->a[i].zName) == 0) {
-				sqlErrorMsg(pParse,
-						"duplicate WITH table name: %s",
-						zName);
+				err_msg = tt_sprintf(err_msg, zName);
+				diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+					 err_msg);
+				pParse->is_aborted = true;
 			}
 		}
 	}

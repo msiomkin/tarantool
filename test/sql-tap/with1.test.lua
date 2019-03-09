@@ -134,7 +134,7 @@ test:do_catchsql_test(3.2, [[
   SELECT * FROM tmp;
 ]], {
   -- <3.2>
-  1, "duplicate WITH table name: TMP"
+  1, "Ambiguous table name in WITH query: TMP"
   -- </3.2>
 })
 
