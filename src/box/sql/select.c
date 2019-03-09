@@ -3396,11 +3396,9 @@ multiSelectOrderBy(Parse * pParse,	/* Parsing context */
 	 */
 	p->pPrior = 0;
 	pPrior->pNext = 0;
-	sqlResolveOrderGroupBy(pParse, p, p->pOrderBy, "ORDER");
-	if (pPrior->pPrior == 0) {
-		sqlResolveOrderGroupBy(pParse, pPrior, pPrior->pOrderBy,
-					   "ORDER");
-	}
+	sqlResolveOrderGroupBy(pParse, p, p->pOrderBy, true);
+	if (pPrior->pPrior == 0)
+		sqlResolveOrderGroupBy(pParse, pPrior, pPrior->pOrderBy, true);
 
 	/* Compute the limit registers */
 	computeLimitRegisters(pParse, p, labelEnd);

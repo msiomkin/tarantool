@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(31)
+test:plan(33)
 
 test:execsql([[
 	CREATE TABLE t0 (i INT PRIMARY KEY);
@@ -361,6 +361,28 @@ test:do_catchsql_test(
 		-- <sql-errors-1.31>
 		1,"The number of columns in set list 2001 exceeds the limit (2000)"
 		-- </sql-errors-1.31>
+	})
+
+select_statement = 'SELECT * FROM (SELECT 1 UNION ALL SELECT 1 ORDER BY 1'..string.rep(', 1', 2000)..')'
+
+test:do_catchsql_test(
+	"sql-errors-1.32",
+	select_statement,
+	{
+		-- <sql-errors-1.32>
+		1,"The number of terms in ORDER BY clause 2001 exceeds the limit (2000)"
+		-- </sql-errors-1.32>
+	})
+
+select_statement = 'SELECT 1 ORDER BY 1'..string.rep(', 1', 2000)
+
+test:do_catchsql_test(
+	"sql-errors-1.33",
+	select_statement,
+	{
+		-- <sql-errors-1.33>
+		1,"The number of terms in ORDER BY clause 2001 exceeds the limit (2000)"
+		-- </sql-errors-1.33>
 	})
 
 test:finish_test()

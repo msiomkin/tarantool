@@ -951,7 +951,10 @@ resolveCompoundOrderBy(Parse * pParse,	/* Parsing context.  Leave error messages
 	db = pParse->db;
 #if SQL_MAX_COLUMN
 	if (pOrderBy->nExpr > db->aLimit[SQL_LIMIT_COLUMN]) {
-		sqlErrorMsg(pParse, "too many terms in ORDER BY clause");
+		diag_set(ClientError, ER_SQL_PARSER_LIMIT,
+			 "The number of terms in ORDER BY clause", 0, "",
+			 pOrderBy->nExpr, db->aLimit[SQL_LIMIT_COLUMN]);
+		pParse->is_aborted = true;
 		return 1;
 	}
 #endif
@@ -1041,27 +1044,34 @@ resolveCompoundOrderBy(Parse * pParse,	/* Parsing context.  Leave error messages
  * field) then convert that term into a copy of the corresponding result set
  * column.
  *
- * If any errors are detected, add an error message to pParse and
- * return non-zero.  Return zero if no errors are seen.
+ * @param pParse Parsing context.
+ * @param pSelect The SELECT statement containing the clause.
+ * @param pOrderBy The ORDER BY or GROUP BY clause to be
+ *                 processed.
+ * @param is_order_by True if pOrderBy is ORDER BY, false if
+ *                    pOrderBy is GROUP BY
+ * @retval 0 On success, not 0 elsewhere.
  */
 int
-sqlResolveOrderGroupBy(Parse * pParse,	/* Parsing context.  Leave error messages here */
-			   Select * pSelect,	/* The SELECT statement containing the clause */
-			   ExprList * pOrderBy,	/* The ORDER BY or GROUP BY clause to be processed */
-			   const char *zType	/* "ORDER" or "GROUP" */
-    )
+sqlResolveOrderGroupBy(Parse *pParse, Select *pSelect, ExprList *pOrderBy,
+		       bool is_order_by)
 {
 	int i;
 	sql *db = pParse->db;
 	ExprList *pEList;
 	struct ExprList_item *pItem;
+	const char *zType = is_order_by ? "ORDER" : "GROUP";
 
 	if (pOrderBy == 0 || pParse->db->mallocFailed)
 		return 0;
 #if SQL_MAX_COLUMN
 	if (pOrderBy->nExpr > db->aLimit[SQL_LIMIT_COLUMN]) {
-		sqlErrorMsg(pParse, "too many terms in %s BY clause",
-				zType);
+		const char *err_msg =
+			is_order_by ? "The number of terms in ORDER BY clause" :
+				      "The number of terms in GROUP BY clause";
+		diag_set(ClientError, ER_SQL_PARSER_LIMIT, err_msg, 0, "",
+			 pOrderBy->nExpr, db->aLimit[SQL_LIMIT_COLUMN]);
+		pParse->is_aborted = true;
 		return 1;
 	}
 #endif
@@ -1095,22 +1105,23 @@ sqlResolveOrderGroupBy(Parse * pParse,	/* Parsing context.  Leave error messages
  * result-set expression.  Otherwise, the expression is resolved in
  * the usual way - using sqlResolveExprNames().
  *
- * This routine returns the number of errors.  If errors occur, then
- * an appropriate error message might be left in pParse.  (OOM errors
- * excepted.)
+ * @param pNC The name context of the SELECT statement.
+ * @param pSelect The SELECT statement containing the clause.
+ * @param pOrderBy An ORDER BY or GROUP BY clause to resolve.
+ * @param is_order_by True if pOrderBy is ORDER BY, false if
+ *                    pOrderBy is GROUP BY
+ * @retval 0 On success, not 0 elsewhere.
  */
 static int
-resolveOrderGroupBy(NameContext * pNC,	/* The name context of the SELECT statement */
-		    Select * pSelect,	/* The SELECT statement holding pOrderBy */
-		    ExprList * pOrderBy,	/* An ORDER BY or GROUP BY clause to resolve */
-		    const char *zType	/* Either "ORDER" or "GROUP", as appropriate */
-    )
+resolveOrderGroupBy(NameContext *pNC, Select *pSelect, ExprList *pOrderBy,
+		    bool is_order_by)
 {
 	int i, j;		/* Loop counters */
 	int iCol;		/* Column number */
 	struct ExprList_item *pItem;	/* A term of the ORDER BY clause */
 	Parse *pParse;		/* Parsing context */
 	int nResult;		/* Number of terms in the result set */
+	const char *zType = is_order_by ? "ORDER" : "GROUP";
 
 	if (pOrderBy == 0)
 		return 0;
@@ -1157,7 +1168,7 @@ resolveOrderGroupBy(NameContext * pNC,	/* The name context of the SELECT stateme
 			}
 		}
 	}
-	return sqlResolveOrderGroupBy(pParse, pSelect, pOrderBy, zType);
+	return sqlResolveOrderGroupBy(pParse, pSelect, pOrderBy, is_order_by);
 }
 
 /*
@@ -1396,7 +1407,7 @@ resolveSelectStep(Walker * pWalker, Select * p)
 		 * resolve those symbols on the incorrect ORDER BY for consistency.
 		 */
 		if (isCompound <= nCompound	/* Defer right-most ORDER BY of a compound */
-		    && resolveOrderGroupBy(&sNC, p, p->pOrderBy, "ORDER")
+		    && resolveOrderGroupBy(&sNC, p, p->pOrderBy, true)
 		    ) {
 			return WRC_Abort;
 		}
@@ -1410,7 +1421,7 @@ resolveSelectStep(Walker * pWalker, Select * p)
 		if (pGroupBy) {
 			struct ExprList_item *pItem;
 
-			if (resolveOrderGroupBy(&sNC, p, pGroupBy, "GROUP")
+			if (resolveOrderGroupBy(&sNC, p, pGroupBy, false)
 			    || db->mallocFailed) {
 				return WRC_Abort;
 			}
