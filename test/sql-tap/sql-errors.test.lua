@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(33)
+test:plan(36)
 
 test:execsql([[
 	CREATE TABLE t0 (i INT PRIMARY KEY);
@@ -383,6 +383,37 @@ test:do_catchsql_test(
 		-- <sql-errors-1.33>
 		1,"The number of terms in ORDER BY clause 2001 exceeds the limit (2000)"
 		-- </sql-errors-1.33>
+	})
+
+select_statement = 'SELECT 1 as '..string.rep('x', 65001)
+
+test:do_catchsql_test(
+	"sql-errors-1.34",
+	select_statement,
+	{
+		-- <sql-errors-1.34>
+		1,"Invalid identifier 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' (expected printable symbols only or it is too long)"
+		-- </sql-errors-1.34>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.35",
+	[[
+		SELECT 1 as "";
+	]], {
+		-- <sql-errors-1.35>
+		1,"Invalid identifier '' (expected printable symbols only or it is too long)"
+		-- </sql-errors-1.35>
+	})
+
+test:do_catchsql_test(
+	"sql-errors-1.36",
+	[[
+		SELECT likelihood(1, 2);
+	]], {
+		-- <sql-errors-1.36>
+		1,"Illegal parameters, second argument to likelihood() must be a constant between 0.0 and 1.0"
+		-- </sql-errors-1.36>
 	})
 
 test:finish_test()

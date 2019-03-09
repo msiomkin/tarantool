@@ -743,7 +743,7 @@ cmd ::= with(C) UPDATE orconf(R) fullname(X) indexed_opt(I) SET setlist(Y)
         where_opt(W).  {
   sqlWithPush(pParse, C, 1);
   sqlSrcListIndexedBy(pParse, X, &I);
-  if (Y->nExpr > pParse->db->aLimit[SQL_LIMIT_COLUMN]) {
+  if (Y != NULL && Y->nExpr > pParse->db->aLimit[SQL_LIMIT_COLUMN]) {
     diag_set(ClientError, ER_SQL_PARSER_LIMIT, "The number of columns in set "\
              "list", 0, "", Y->nExpr, pParse->db->aLimit[SQL_LIMIT_COLUMN]);
     pParse->is_aborted = true;
