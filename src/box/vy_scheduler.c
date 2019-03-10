@@ -901,6 +901,7 @@ fail:
 	batch->is_failed = true;
 	diag_move(diag_get(), &batch->diag);
 	txn_rollback();
+	fiber_gc();
 }
 
 /**

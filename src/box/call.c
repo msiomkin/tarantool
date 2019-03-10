@@ -209,12 +209,14 @@ box_process_call(struct call_request *request, struct port *port)
 
 	if (rc != 0) {
 		txn_rollback();
+		fiber_gc();
 		return -1;
 	}
 
 	if (in_txn()) {
 		diag_set(ClientError, ER_FUNCTION_TX_ACTIVE);
 		txn_rollback();
+		fiber_gc();
 		return -1;
 	}
 
@@ -230,12 +232,14 @@ box_process_eval(struct call_request *request, struct port *port)
 		return -1;
 	if (box_lua_eval(request, port) != 0) {
 		txn_rollback();
+		fiber_gc();
 		return -1;
 	}
 
 	if (in_txn()) {
 		diag_set(ClientError, ER_FUNCTION_TX_ACTIVE);
 		txn_rollback();
+		fiber_gc();
 		return -1;
 	}
 

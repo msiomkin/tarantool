@@ -399,8 +399,6 @@ txn_rollback()
 		txn_stmt_unref_tuples(stmt);
 
 	TRASH(txn);
-	/** Free volatile txn memory. */
-	fiber_gc();
 	fiber_set_txn(fiber(), NULL);
 }
 
@@ -480,6 +478,8 @@ box_txn_rollback()
 		return -1;
 	}
 	txn_rollback(); /* doesn't throw */
+	/** Free volatile txn memory. */
+	fiber_gc();
 	return 0;
 }
 
