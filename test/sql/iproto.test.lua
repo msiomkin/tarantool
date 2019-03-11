@@ -289,6 +289,21 @@ res.metadata
 res = cn:execute("EXPLAIN QUERY PLAN SELECT COUNT(*) FROM t1")
 res.metadata
 
+-- Make sure that built-in functions have a right returning type.
+--
+cn:execute("SELECT zeroblob(1);")
+-- randomblob() returns different results each time, so check only
+-- type in meta.
+--
+res = cn:execute("SELECT randomblob(1);")
+res.metadata
+-- Type set during compilation stage, and since min/max are accept
+-- arguments of all scalar type, we can't say nothing more than
+-- SCALAR.
+--
+cn:execute("SELECT min(1, 2, 3);")
+cn:execute("SELECT max(1, 2, 3);")
+
 cn:close()
 box.sql.execute('DROP TABLE t1')
 
