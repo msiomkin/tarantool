@@ -58,11 +58,11 @@ ret
 ---
 - metadata:
   - name: ID
-    type: INTEGER
+    type: integer
   - name: A
-    type: NUMERIC
+    type: number
   - name: B
-    type: TEXT
+    type: string
   rows:
   - [1, 2, '3']
   - [4, 5, '6']
@@ -103,7 +103,7 @@ cn:execute('select id as identifier from test where a = 5;')
 ---
 - metadata:
   - name: IDENTIFIER
-    type: INTEGER
+    type: integer
   rows: []
 ...
 -- netbox API errors.
@@ -131,11 +131,11 @@ cn:execute('select * from test where id = ?', {1})
 ---
 - metadata:
   - name: ID
-    type: INTEGER
+    type: integer
   - name: A
-    type: NUMERIC
+    type: number
   - name: B
-    type: TEXT
+    type: string
   rows:
   - [1, 2, '3']
 ...
@@ -143,11 +143,11 @@ cn:execute('select * from test limit ?', {2})
 ---
 - metadata:
   - name: ID
-    type: INTEGER
+    type: integer
   - name: A
-    type: NUMERIC
+    type: number
   - name: B
-    type: TEXT
+    type: string
   rows:
   - [1, 2, '3']
   - [7, 8.5, '9']
@@ -171,11 +171,11 @@ cn:execute('select * from test limit 1 offset ?', {2})
 ---
 - metadata:
   - name: ID
-    type: INTEGER
+    type: integer
   - name: A
-    type: NUMERIC
+    type: number
   - name: B
-    type: TEXT
+    type: string
   rows:
   - [10, 11, null]
 ...
@@ -210,11 +210,11 @@ cn:execute('select * from test where id = :value', parameters)
 ---
 - metadata:
   - name: ID
-    type: INTEGER
+    type: integer
   - name: A
-    type: NUMERIC
+    type: number
   - name: B
-    type: TEXT
+    type: string
   rows:
   - [1, 2, '3']
 ...
@@ -306,7 +306,7 @@ cn:execute('select :value3, ?, :value1, ?, ?, @value2, ?, :value3', parameters)
   - name: '@value2'
     type: INTEGER
   - name: '?'
-    type: BOOLEAN
+    type: boolean
   - name: :value3
     type: INTEGER
   rows:
@@ -436,13 +436,13 @@ cn:execute('select * from test2')
 ---
 - metadata:
   - name: ID
-    type: INTEGER
+    type: integer
   - name: A
-    type: INTEGER
+    type: integer
   - name: B
-    type: INTEGER
+    type: integer
   - name: C
-    type: INTEGER
+    type: integer
   rows:
   - [1, 1, 1, 1]
 ...
@@ -602,11 +602,11 @@ cn:execute('select * from test where id = :1', {1})
 ---
 - metadata:
   - name: ID
-    type: INTEGER
+    type: integer
   - name: A
-    type: NUMERIC
+    type: number
   - name: B
-    type: TEXT
+    type: string
   rows:
   - [1, 2, '3']
 ...
@@ -620,11 +620,11 @@ res = cn:execute('select * from test')
 res.metadata
 ---
 - - name: ID
-    type: INTEGER
+    type: integer
   - name: A
-    type: NUMERIC
+    type: number
   - name: B
-    type: TEXT
+    type: string
 ...
 box.sql.execute('drop table test')
 ---
@@ -672,11 +672,11 @@ future4:wait_result()
 ---
 - metadata:
   - name: ID
-    type: INTEGER
+    type: integer
   - name: A
-    type: INTEGER
+    type: integer
   - name: B
-    type: INTEGER
+    type: integer
   rows:
   - [1, 1, 1]
   - [2, 2, 2]
@@ -731,9 +731,9 @@ cn:execute('select * from test')
 ---
 - metadata:
   - name: ID
-    type: INTEGER
+    type: integer
   - name: A
-    type: INTEGER
+    type: integer
   rows:
   - [1, 11]
   - [2, 2]
@@ -850,9 +850,9 @@ cn:execute('select * from "test"')
 ---
 - metadata:
   - name: id
-    type: INTEGER
+    type: integer
   - name: x
-    type: UNKNOWN
+    type: any
   rows:
   - [1, [1, 2, 3]]
   - [2, {'a': 3}]

@@ -115,7 +115,7 @@ select_res
 ---
 - metadata:
   - name: '1'
-    type: INTEGER
+    type: integer
   rows:
   - [1]
 ...
