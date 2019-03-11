@@ -22,11 +22,26 @@ fio.glob(fio.pathjoin(box.space.test.id, 0, '*'))
 test_run:cmd("switch default")
 test_run:cmd("stop server replica")
 
+checkpoint_count = box.cfg.checkpoint_count
+box.cfg{checkpoint_count = 1}
+box.space.test:delete(1)
+box.snapshot()
+box.cfg{checkpoint_count = checkpoint_count}
+
+test_run:cmd("start server replica")
+test_run:cmd("switch replica")
+fio = require('fio')
+fio.chdir(box.cfg.vinyl_dir)
+fio.glob(fio.pathjoin(box.space.test.id, 0, '*'))
+box.space.test:count() -- 99
+test_run:cmd("switch default")
+test_run:cmd("stop server replica")
+
 -- Invoke garbage collector on the master.
 test_run:cmd("restart server default")
 checkpoint_count = box.cfg.checkpoint_count
 box.cfg{checkpoint_count = 1}
-box.space.test:delete(1)
+box.space.test:delete(2)
 box.snapshot()
 box.cfg{checkpoint_count = checkpoint_count}
 
