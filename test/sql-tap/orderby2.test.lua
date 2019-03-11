@@ -17,6 +17,13 @@ test:plan(9)
 -- focus of this file is testing that the optimizations that disable
 -- ORDER BY clauses when the natural order of a query is correct.
 --
+-- NOTE: some tests in this file and also in another orderby test
+-- files are expected to fail with "ORDER BY does not support
+-- different sorting orders" error. This behavior is temporary
+-- and corresponding tests must be fixed when different sorting
+-- orders will be allowed in ORDER BY. For details please see
+-- tickets #4038 and #3309.
+--
 -- ["set","testdir",[["file","dirname",["argv0"]]]]
 -- ["source",[["testdir"],"\/tester.tcl"]]
 testprefix = "orderby2"
@@ -118,7 +125,7 @@ test:do_test(
 test:do_test(
     2.0,
     function()
-        return test:execsql [[
+        return test:catchsql [[
             CREATE TABLE t31(a INT ,b INT , PRIMARY KEY(a,b));
             CREATE TABLE t32(c INT ,d INT , PRIMARY KEY(c,d));
             CREATE TABLE t33(e INT ,f INT , PRIMARY KEY(e,f));
@@ -135,21 +142,21 @@ test:do_test(
         ]]
     end, {
         -- <2.0>
-        "1,3,7,10", "1,3,7,14", "1,3,6,11", "1,4,8,12", "1,4,8,12", "1,4,8,13", "1,4,5,9", "2,3,7,10", "2,3,7,14", "2,3,6,11"
+        1, "ORDER BY does not support different sorting orders",
         -- </2.0>
     })
 
 test:do_test(
     2.1,
     function()
-        return test:execsql [[
+        return test:catchsql [[
             SELECT CAST(a AS TEXT)||','||CAST(c AS TEXT)||','||CAST(e AS TEXT)||','||CAST(g AS TEXT) FROM t31, t32, t33, t34
              WHERE c=b AND e=d AND g=f
              ORDER BY +a ASC, +c ASC, +e DESC, +g ASC;
         ]]
     end, {
         -- <2.1>
-        "1,3,7,10", "1,3,7,14", "1,3,6,11", "1,4,8,12", "1,4,8,12", "1,4,8,13", "1,4,5,9", "2,3,7,10", "2,3,7,14", "2,3,6,11"
+        1, "ORDER BY does not support different sorting orders",
         -- </2.1>
     })
 

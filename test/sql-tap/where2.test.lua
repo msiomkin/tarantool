@@ -402,18 +402,26 @@ test:do_test(
         -- </where2-4.6c>
     })
 
-test:do_test(
+test:do_catchsql_test(
     "where2-4.6d",
-    function()
-        return queryplan([[
+    [[
       SELECT w,x,y,z FROM t1
        WHERE x IN (1,2,3,4,5,6,7,8)
          AND y IN (10000,10001,10002,10003,10004,10005)
        ORDER BY x, y DESC
-    ]])
-    end, {
+    ]],
+    --function()
+    --    return queryplan([[
+    --  SELECT w,x,y,z FROM t1
+    --   WHERE x IN (1,2,3,4,5,6,7,8)
+    --     AND y IN (10000,10001,10002,10003,10004,10005)
+    --   ORDER BY x, y DESC
+    --]])
+    --end,
+    {
         -- <where2-4.6d>
-        99, 6, 10000, 10006, "sort", "T1", "I1XY"
+        1, "ORDER BY does not support different sorting orders"
+        --99, 6, 10000, 10006, "sort", "T1", "I1XY"
         -- </where2-4.6d>
     })
 

@@ -16,6 +16,13 @@ test:plan(52)
 -- This file implements regression tests for sql library.  The
 -- focus of this file is testing that the block-sort optimization.
 --
+-- NOTE: some tests in this file and also in another orderby test
+-- files are expected to fail with "ORDER BY does not support
+-- different sorting orders" error. This behavior is temporary
+-- and corresponding tests must be fixed when different sorting
+-- orders will be allowed in ORDER BY. For details please see
+-- tickets #4038 and #3309.
+--
 -- ["set","testdir",[["file","dirname",["argv0"]]]]
 -- ["source",[["testdir"],"\/tester.tcl"]]
 testprefix = "orderby6"
@@ -54,28 +61,31 @@ testprefix = "orderby6"
         test:execsql "SELECT b,a,c FROM t1 ORDER BY +b,+a,+c"
         )
 
-    test:do_execsql_test(
+    test:do_catchsql_test(
         "1.3",
         [[
             SELECT b,a,c FROM t1 ORDER BY b,c DESC,a;
-        ]], 
-        test:execsql "SELECT b,a,c FROM t1 ORDER BY +b,+c DESC,+a"
+        ]],
+        {1, "ORDER BY does not support different sorting orders"}
+        --test:execsql "SELECT b,a,c FROM t1 ORDER BY +b,+c DESC,+a"
         )
 
-    test:do_execsql_test(
+    test:do_catchsql_test(
         "1.4",
         [[
             SELECT b,a,c FROM t1 ORDER BY b DESC,c,a;
-        ]], 
-        test:execsql "SELECT b,a,c FROM t1 ORDER BY +b DESC,+c,+a"
+        ]],
+        {1, "ORDER BY does not support different sorting orders"}
+        --test:execsql "SELECT b,a,c FROM t1 ORDER BY +b DESC,+c,+a"
         )
 
-    test:do_execsql_test(
+    test:do_catchsql_test(
         "1.5",
         [[
             SELECT b,a,c FROM t1 ORDER BY b DESC,a,c;
-        ]], 
-        test:execsql "SELECT b,a,c FROM t1 ORDER BY +b DESC,+a,+c"
+        ]],
+        {1, "ORDER BY does not support different sorting orders"}
+        --test:execsql "SELECT b,a,c FROM t1 ORDER BY +b DESC,+a,+c"
         )
 
     -- LIMIT and OFFSET clauses on block-sort queries.
@@ -150,6 +160,10 @@ testprefix = "orderby6"
     -- Many test cases where the LIMIT+OFFSET window is in various
     -- alignments with block-sort boundaries.
     --
+    -- Test cases with 'err=true' are expected to fail,
+    -- if different sorting orders are not supported in
+    -- ORDER BY clause.
+    --
     local data = {
         {limit=0, offset=4, orderby="+b,+a"},
         {limit=0, offset=5, orderby="+b,+a"},
@@ -159,22 +173,22 @@ testprefix = "orderby6"
         {limit=0, offset=1, orderby="+b,+a"},
         {limit=7, offset=4, orderby="+b,+a"},
         {limit=7, offset=9, orderby="+b,+a"},
-        {limit=0, offset=4, orderby="+b DESC,+a"},
-        {limit=0, offset=5, orderby="+b DESC,+a"},
-        {limit=0, offset=6, orderby="+b DESC,+a"},
-        {limit=0, offset=9, orderby="+b DESC,+a"},
-        {limit=0, offset=0, orderby="+b DESC,+a"},
-        {limit=0, offset=1, orderby="+b DESC,+a"},
-        {limit=7, offset=4, orderby="+b DESC,+a"},
-        {limit=7, offset=9, orderby="+b DESC,+a"},
-        {limit=0, offset=4, orderby="+b,+a DESC"},
-        {limit=0, offset=5, orderby="+b,+a DESC"},
-        {limit=0, offset=6, orderby="+b,+a DESC"},
-        {limit=0, offset=9, orderby="+b,+a DESC"},
-        {limit=0, offset=0, orderby="+b,+a DESC"},
-        {limit=0, offset=1, orderby="+b,+a DESC"},
-        {limit=7, offset=4, orderby="+b,+a DESC"},
-        {limit=7, offset=9, orderby="+b,+a DESC"},
+        {limit=0, offset=4, orderby="+b DESC,+a", err=true},
+        {limit=0, offset=5, orderby="+b DESC,+a", err=true},
+        {limit=0, offset=6, orderby="+b DESC,+a", err=true},
+        {limit=0, offset=9, orderby="+b DESC,+a", err=true},
+        {limit=0, offset=0, orderby="+b DESC,+a", err=true},
+        {limit=0, offset=1, orderby="+b DESC,+a", err=true},
+        {limit=7, offset=4, orderby="+b DESC,+a", err=true},
+        {limit=7, offset=9, orderby="+b DESC,+a", err=true},
+        {limit=0, offset=4, orderby="+b,+a DESC", err=true},
+        {limit=0, offset=5, orderby="+b,+a DESC", err=true},
+        {limit=0, offset=6, orderby="+b,+a DESC", err=true},
+        {limit=0, offset=9, orderby="+b,+a DESC", err=true},
+        {limit=0, offset=0, orderby="+b,+a DESC", err=true},
+        {limit=0, offset=1, orderby="+b,+a DESC", err=true},
+        {limit=7, offset=4, orderby="+b,+a DESC", err=true},
+        {limit=7, offset=9, orderby="+b,+a DESC", err=true},
         {limit=0, offset=4, orderby="+b DESC,+a DESC"},
         {limit=0, offset=5, orderby="+b DESC,+a DESC"},
         {limit=0, offset=6, orderby="+b DESC,+a DESC"},
@@ -183,10 +197,16 @@ testprefix = "orderby6"
         {limit=0, offset=1, orderby="+b DESC,+a DESC"},
         {limit=7, offset=4, orderby="+b DESC,+a DESC"},
         {limit=7, offset=9, orderby="+b DESC,+a DESC"}}
+    local expected_err_res = {1, "ORDER BY does not support different sorting orders"}
     for i, v in ipairs(data) do
-        local sql1 = "SELECT a FROM t1 ORDER BY "..v.orderby.." LIMIT "..v.limit.." OFFSET "..v.offset..";"
-        local sql2 = "SELECT a FROM t1 ORDER BY "..string.gsub(v.orderby, "+", "").." LIMIT "..v.limit.." OFFSET "..v.offset..";"
-        test:do_execsql_test("1.21."..i, sql1, test:execsql(sql2))
+        if v.err then
+            local sql1 = "SELECT a FROM t1 ORDER BY "..v.orderby.." LIMIT "..v.limit.." OFFSET "..v.offset..";"
+            test:do_catchsql_test("1.21."..i, sql1, expected_err_res)
+        else
+            local sql1 = "SELECT a FROM t1 ORDER BY "..v.orderby.." LIMIT "..v.limit.." OFFSET "..v.offset..";"
+            local sql2 = "SELECT a FROM t1 ORDER BY "..string.gsub(v.orderby, "+", "").." LIMIT "..v.limit.." OFFSET "..v.offset..";"
+            test:do_execsql_test("1.21."..i, sql1, test:execsql(sql2))
+        end
     end
 
 --     for _ in X(0, "X!foreach", [=[["tx limit offset orderby","\n     1  10 24 {+b,+a}\n     2  10 25 {+b,+a}\n     3  10 26 {+b,+a}\n     4  10 39 {+b,+a}\n     5  10 40 {+b,+a}\n     6  10 41 {+b,+a}\n     7  27 24 {+b,+a}\n     8  27 49 {+b,+a}\n     11 10 24 {+b DESC,+a}\n     12 10 25 {+b DESC,+a}\n     13 10 26 {+b DESC,+a}\n     14 10 39 {+b DESC,+a}\n     15 10 40 {+b DESC,+a}\n     16 10 41 {+b DESC,+a}\n     17 27 24 {+b DESC,+a}\n     18 27 49 {+b DESC,+a}\n     21 10 24 {+b,+a DESC}\n     22 10 25 {+b,+a DESC}\n     23 10 26 {+b,+a DESC}\n     24 10 39 {+b,+a DESC}\n     25 10 40 {+b,+a DESC}\n     26 10 41 {+b,+a DESC}\n     27 27 24 {+b,+a DESC}\n     28 27 49 {+b,+a DESC}\n     31 10 24 {+b DESC,+a DESC}\n     32 10 25 {+b DESC,+a DESC}\n     33 10 26 {+b DESC,+a DESC}\n     34 10 39 {+b DESC,+a DESC}\n     35 10 40 {+b DESC,+a DESC}\n     36 10 41 {+b DESC,+a DESC}\n     37 27 24 {+b DESC,+a DESC}\n     38 27 49 {+b DESC,+a DESC}\n  "]]=]) do
@@ -258,59 +278,66 @@ testprefix = "orderby6"
         test:execsql "SELECT a FROM t2 ORDER BY +b,+c,+d,+e,+f;"
         )
 
-    test:do_execsql_test(
+    test:do_catchsql_test(
         "1.37",
         [[
             SELECT a FROM t2 ORDER BY b,c,d,e,f DESC;
-        ]], 
-        test:execsql "SELECT a FROM t2 ORDER BY +b,+c,+d,+e,+f DESC;"
+        ]],
+        {1, "ORDER BY does not support different sorting orders"}
+        --test:execsql "SELECT a FROM t2 ORDER BY +b,+c,+d,+e,+f DESC;"
         )
 
-    test:do_execsql_test(
+    test:do_catchsql_test(
         "1.38",
         [[
             SELECT a FROM t2 ORDER BY b,c,d,e DESC,f;
-        ]], 
-        test:execsql "SELECT a FROM t2 ORDER BY +b,+c,+d,+e DESC,+f;"
+        ]],
+        {1, "ORDER BY does not support different sorting orders"}
+        --test:execsql "SELECT a FROM t2 ORDER BY +b,+c,+d,+e DESC,+f;"
         )
 
-    test:do_execsql_test(
+    test:do_catchsql_test(
         "1.39",
         [[
             SELECT a FROM t2 ORDER BY b,c,d DESC,e,f;
-        ]], 
-        test:execsql "SELECT a FROM t2 ORDER BY +b,+c,+d DESC,+e,+f;"
+        ]],
+        {1, "ORDER BY does not support different sorting orders"}
+        --test:execsql "SELECT a FROM t2 ORDER BY +b,+c,+d DESC,+e,+f;"
         )
 
-    test:do_execsql_test(
+    test:do_catchsql_test(
         "1.40",
         [[
             SELECT a FROM t2 ORDER BY b,c DESC,d,e,f;
-        ]], 
-        test:execsql "SELECT a FROM t2 ORDER BY +b,+c DESC,+d,+e,+f;"
+        ]],
+        {1, "ORDER BY does not support different sorting orders"}
+        --test:execsql "SELECT a FROM t2 ORDER BY +b,+c DESC,+d,+e,+f;"
         )
 
-    test:do_execsql_test(
+    test:do_catchsql_test(
         "1.41",
         [[
             SELECT a FROM t2 ORDER BY b DESC,c,d,e,f;
-        ]], 
-        test:execsql "SELECT a FROM t2 ORDER BY +b DESC,+c,+d,+e,+f;"
+        ]],
+        {1, "ORDER BY does not support different sorting orders"}
+        --test:execsql "SELECT a FROM t2 ORDER BY +b DESC,+c,+d,+e,+f;"
         )
 
-    test:do_execsql_test(
+    test:do_catchsql_test(
         "1.42",
         [[
             SELECT a FROM t2 ORDER BY b DESC,c DESC,d,e,f LIMIT 31;
-        ]], 
-        test:execsql "SELECT a FROM t2 ORDER BY +b DESC,+c DESC,+d,+e,+f LIMIT 31"
+        ]],
+        {1, "ORDER BY does not support different sorting orders"}
+        --test:execsql "SELECT a FROM t2 ORDER BY +b DESC,+c DESC,+d,+e,+f LIMIT 31"
         )
 
-    test:do_execsql_test(
+    test:do_catchsql_test(
         "1.43",
         [[
             SELECT a FROM t2 ORDER BY b,c,d,e,f DESC LIMIT 8 OFFSET 7;
-        ]], 
-        test:execsql "SELECT a FROM t2 ORDER BY +b,+c,+d,+e,+f DESC LIMIT 8 OFFSET 7"
+        ]],
+        {1, "ORDER BY does not support different sorting orders"}
+        --test:execsql "SELECT a FROM t2 ORDER BY +b,+c,+d,+e,+f DESC LIMIT 8 OFFSET 7"
         )
 test:finish_test()

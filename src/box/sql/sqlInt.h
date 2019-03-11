@@ -3237,6 +3237,20 @@ ExprList *sqlExprListAppendVector(Parse *, ExprList *, IdList *, Expr *);
  */
 void sqlExprListSetSortOrder(ExprList *, enum sort_order sort_order);
 
+/**
+ * Check if sorting orders are the same in ORDER BY and rise an
+ * error if they are not.
+ *
+ * In future, we will support different sorting orders in
+ * ORDER BY (e.g. ORDER BY col1 ASC, col2 DESC) and remove this
+ * check (see ticket #3309).
+ * @param expr_list Expression list with  ORDER BY clause
+ * at the end.
+ * @param parse Parsing context.
+ */
+void
+sql_check_sort_orders(ExprList * expr_list, Parse *parse);
+
 void sqlExprListSetName(Parse *, ExprList *, Token *, int);
 void sqlExprListSetSpan(Parse *, ExprList *, ExprSpan *);
 u32 sqlExprListFlags(const ExprList *);

@@ -661,7 +661,10 @@ using_opt(U) ::= .                        {U = 0;}
 %destructor sortlist {sql_expr_list_delete(pParse->db, $$);}
 
 orderby_opt(A) ::= .                          {A = 0;}
-orderby_opt(A) ::= ORDER BY sortlist(X).      {A = X;}
+orderby_opt(A) ::= ORDER BY sortlist(X). {
+  sql_check_sort_orders(X, pParse);
+  A = X;
+}
 sortlist(A) ::= sortlist(A) COMMA expr(Y) sortorder(Z). {
   A = sql_expr_list_append(pParse->db,A,Y.pExpr);
   sqlExprListSetSortOrder(A,Z);

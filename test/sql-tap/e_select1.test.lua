@@ -1739,69 +1739,126 @@ test:do_select_tests(
 --   Test cases e_select-8.3.* test the above. All 8.3 test cases are
 --   copies of 8.2 test cases with the explicit "ASC" removed.
 --
-test:do_select_tests(
-    "e_select-8",
+-- NOTE: some tests in the e_select_8.2 and 8.3 suites are
+-- expected to fail with "ORDER BY does not support different
+-- sorting orders" error. This behavior is temporary and
+-- corresponding tests must be fixed when different sorting
+-- orders will be allowed in ORDER BY. For details please see
+-- tickets #4038 and #3309.
+local test_cases = {
     {
-        {"2.1", "SELECT x,y,z FROM d1 ORDER BY x ASC, y ASC, z ASC", {
-            1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1,2,4,93,2,5,-1
-        }},
-        {"2.2", "SELECT x,y,z FROM d1 ORDER BY x DESC, y DESC, z DESC", {
-            2,5,-1,2,4,93,1,5,-1,1,4,93,1,2,8,1,2,7,1,2,3,1,2,-20
-        }},
-        {"2.3", "SELECT x,y,z FROM d1 ORDER BY x DESC, y ASC, z DESC", {
-            2,4,93,2,5,-1,1,2,8,1,2,7,1,2,3,1,2,-20,1,4,93,1,5,-1
-        }},
-        {"2.4", "SELECT x,y,z FROM d1 ORDER BY x DESC, y ASC, z ASC", {
-            2,4,93,2,5,-1,1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1
-        }},
+        test = "SELECT x,y,z FROM d1 ORDER BY x ASC, y ASC, z ASC",
+        result = {0, {1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1,2,4,93,2,5,-1,}}
+    },
+    {
+        test = "SELECT x,y,z FROM d1 ORDER BY x DESC, y DESC, z DESC",
+        result = {0, {2,5,-1,2,4,93,1,5,-1,1,4,93,1,2,8,1,2,7,1,2,3,1,2,-20,}}
+    },
+    {
+        test = "SELECT x,y,z FROM d1 ORDER BY x DESC, y ASC, z DESC",
+        result = {1, "ORDER BY does not support different sorting orders"},
+        --result = {0, {2,4,93,2,5,-1,1,2,8,1,2,7,1,2,3,1,2,-20,1,4,93,1,5,-1,}}
+    },
+    {
+        test =  "SELECT x,y,z FROM d1 ORDER BY x DESC, y ASC, z ASC",
+        result = {1, "ORDER BY does not support different sorting orders"},
+        --result = {0, {2,4,93,2,5,-1,1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1,}}
+    }
+}
 
-        {"3.1", "SELECT x,y,z FROM d1 ORDER BY x, y, z", {
-            1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1,2,4,93,2,5,-1
-        }},
-        {"3.3", "SELECT x,y,z FROM d1 ORDER BY x DESC, y, z DESC", {
-            2,4,93,2,5,-1,1,2,8,1,2,7,1,2,3,1,2,-20,1,4,93,1,5,-1
-        }},
-        {"3.4", "SELECT x,y,z FROM d1 ORDER BY x DESC, y, z", {
-            2,4,93,2,5,-1,1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1
-        }},
-    })
+for i, test_case in ipairs(test_cases) do
+    test:do_catchsql_test(
+        "e_select-8.2." .. tostring(i),
+        test_case.test,
+        test_case.result
+    )
+end
+
+test_cases = {
+    {
+        test = "SELECT x,y,z FROM d1 ORDER BY x, y, z",
+        result = {0, {1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1,2,4,93,2,5,-1,}}
+    },
+    {
+        test = "SELECT x,y,z FROM d1 ORDER BY x DESC, y, z DESC",
+        result = {1, "ORDER BY does not support different sorting orders"},
+        --result = {0, {2,4,93,2,5,-1,1,2,8,1,2,7,1,2,3,1,2,-20,1,4,93,1,5,-1,}}
+    },
+    {
+        test = "SELECT x,y,z FROM d1 ORDER BY x DESC, y, z",
+        result = {1, "ORDER BY does not support different sorting orders"},
+        --result = {0, {2,4,93,2,5,-1,1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1,}}
+    },
+}
+
+for i, test_case in ipairs(test_cases) do
+    test:do_catchsql_test(
+        "e_select-8.3." .. tostring(i),
+        test_case.test,
+        test_case.result
+    )
+end
 
 -- EVIDENCE-OF: R-29779-04281 If the ORDER BY expression is a constant
 -- integer K then the expression is considered an alias for the K-th
 -- column of the result set (columns are numbered from left to right
 -- starting with 1).
+-- NOTE: some tests in the e_select_8.4 suite are expected to
+-- fail with "ORDER BY does not support different sorting orders"
+-- error. This behavior is temporary and corresponding tests must
+-- be fixed when different sorting orders will be allowed in
+-- ORDER BY. For details please see tickets #4038 and #3309.
 --
-test:do_select_tests(
-    "e_select-8.4",
+test_cases = {
     {
-        {"1", "SELECT x,y,z FROM d1 ORDER BY 1 ASC, 2 ASC, 3 ASC", {
-            1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1,2,4,93,2,5,-1
-        }},
-        {"2", "SELECT x,y,z FROM d1 ORDER BY 1 DESC, 2 DESC, 3 DESC", {
-            2,5,-1,2,4,93,1,5,-1,1,4,93,1,2,8,1,2,7,1,2,3,1,2,-20
-        }},
-        {"3", "SELECT x,y,z FROM d1 ORDER BY 1 DESC, 2 ASC, 3 DESC", {
-            2,4,93,2,5,-1,1,2,8,1,2,7,1,2,3,1,2,-20,1,4,93,1,5,-1
-        }},
-        {"4", "SELECT x,y,z FROM d1 ORDER BY 1 DESC, 2 ASC, 3 ASC", {
-            2,4,93,2,5,-1,1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1
-        }},
-        {"5", "SELECT x,y,z FROM d1 ORDER BY 1, 2, 3", {
-            1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1,2,4,93,2,5,-1
-        }},
-        {"6", "SELECT x,y,z FROM d1 ORDER BY 1 DESC, 2, 3 DESC", {
-            2,4,93,2,5,-1,1,2,8,1,2,7,1,2,3,1,2,-20,1,4,93,1,5,-1
-        }},
-        {"7", "SELECT x,y,z FROM d1 ORDER BY 1 DESC, 2, 3", {
-            2,4,93,2,5,-1,1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1
-        }},
-        {"8", "SELECT z, x FROM d1 ORDER BY 2", {
-            3,1,8,1,7,1,-20,1,93,1,-1,1,-1,2,93,2
-        }},
-        {"9", "SELECT z, x FROM d1 ORDER BY 1", {
-            -20,1,-1,2,-1,1,3,1,7,1,8,1,93,2,93,1
-        }},
-    })
+        test = "SELECT x,y,z FROM d1 ORDER BY 1 ASC, 2 ASC, 3 ASC",
+        result = {0, {1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1,2,4,93,2,5,-1}}
+    },
+    {
+        test = "SELECT x,y,z FROM d1 ORDER BY 1 DESC, 2 DESC, 3 DESC",
+        result = {0, {2,5,-1,2,4,93,1,5,-1,1,4,93,1,2,8,1,2,7,1,2,3,1,2,-20,}}
+    },
+    {
+        test = "SELECT x,y,z FROM d1 ORDER BY 1 DESC, 2 ASC, 3 DESC",
+        result = {1, "ORDER BY does not support different sorting orders"}
+        --result = {0, {2,4,93,2,5,-1,1,2,8,1,2,7,1,2,3,1,2,-20,1,4,93,1,5,-1}}
+    },
+    {
+        test = "SELECT x,y,z FROM d1 ORDER BY 1 DESC, 2 ASC, 3 ASC",
+        result = {1, "ORDER BY does not support different sorting orders"}
+        --result = {0, {1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1,2,4,93,2,5,-1,}}
+    },
+    {
+        test = "SELECT x,y,z FROM d1 ORDER BY 1, 2, 3",
+        results = {0, {1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1,2,4,93,2,5,-1}}
+    },
+    {
+        test = "SELECT x,y,z FROM d1 ORDER BY 1 DESC, 2, 3 DESC",
+        result = {1, "ORDER BY does not support different sorting orders"}
+        --result = {0, {2,4,93,2,5,-1,1,2,8,1,2,7,1,2,3,1,2,-20,1,4,93,1,5,-1,}}
+    },
+    {
+        test = "SELECT x,y,z FROM d1 ORDER BY 1 DESC, 2, 3",
+        result = {1, "ORDER BY does not support different sorting orders"}
+        --result = {0, {2,4,93,2,5,-1,1,2,-20,1,2,3,1,2,7,1,2,8,1,4,93,1,5,-1,}}
+    },
+    {
+        test = "SELECT z, x FROM d1 ORDER BY 2",
+        result = {0, {3,1,8,1,7,1,-20,1,93,1,-1,1,-1,2,93,2,}}
+    },
+    {
+        test = "SELECT z, x FROM d1 ORDER BY 1",
+        result = {0, {-20,1,-1,2,-1,1,3,1,7,1,8,1,93,2,93,1,}}
+    },
+}
+
+for i, test_case in ipairs(test_cases) do
+    test:do_catchsql_test(
+        "e_select-8.4." .. tostring(i),
+        test_case.test,
+        test_case.result
+    )
+end
 
 -- EVIDENCE-OF: R-63286-51977 If the ORDER BY expression is an identifier
 -- that corresponds to the alias of one of the output columns, then the

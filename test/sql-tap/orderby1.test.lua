@@ -17,6 +17,13 @@ test:plan(35)
 -- focus of this file is testing that the optimizations that disable
 -- ORDER BY clauses when the natural order of a query is correct.
 --
+-- NOTE: some tests in this file and also in another orderby test
+-- files are expected to fail with "ORDER BY does not support
+-- different sorting orders" error. This behavior is temporary
+-- and corresponding tests must be fixed when different sorting
+-- orders will be allowed in ORDER BY. For details please see
+-- tickets #4038 and #3309.
+--
 -- ["set","testdir",[["file","dirname",["argv0"]]]]
 -- ["source",[["testdir"],"\/tester.tcl"]]
 testprefix = "orderby1"
@@ -155,24 +162,24 @@ test:do_test(
 test:do_test(
     "1.4a",
     function()
-        return test:execsql [[
+        return test:catchsql [[
             SELECT name FROM album JOIN track USING (aid) ORDER BY title DESC, tn
         ]]
     end, {
         -- <1.4a>
-        "three-a", "three-c", "two-a", "two-b", "one-a", "one-c"
+        1, "ORDER BY does not support different sorting orders"
         -- </1.4a>
     })
 
 test:do_test(
     "1.4b",
     function()
-        return test:execsql [[
+        return test:catchsql [[
             SELECT name FROM album JOIN track USING (aid) ORDER BY +title DESC, +tn
         ]]
     end, {
         -- <1.4b>
-        "three-a", "three-c", "two-a", "two-b", "one-a", "one-c"
+        1, "ORDER BY does not support different sorting orders"
         -- </1.4b>
     })
 
@@ -180,13 +187,13 @@ test:do_test(
 test:do_test(
     "1.4c",
     function()
-        return test:execsql [[
+        return test:catchsql [[
             EXPLAIN QUERY PLAN
             SELECT name FROM album JOIN track USING (aid) ORDER BY title DESC, tn
         ]]
     end, {
         -- <1.4c>
-        "~/ORDER BY/"
+        1, "ORDER BY does not support different sorting orders"
         -- </1.4c>
     })
 
@@ -194,24 +201,24 @@ test:do_test(
 test:do_test(
     "1.5a",
     function()
-        return test:execsql [[
+        return test:catchsql [[
             SELECT name FROM album JOIN track USING (aid) ORDER BY title, tn DESC
         ]]
     end, {
         -- <1.5a>
-        "one-c", "one-a", "two-b", "two-a", "three-c", "three-a"
+        1, "ORDER BY does not support different sorting orders"
         -- </1.5a>
     })
 
 test:do_test(
     "1.5b",
     function()
-        return test:execsql [[
+        return test:catchsql [[
             SELECT name FROM album JOIN track USING (aid) ORDER BY +title, +tn DESC
         ]]
     end, {
         -- <1.5b>
-        "one-c", "one-a", "two-b", "two-a", "three-c", "three-a"
+        1, "ORDER BY does not support different sorting orders"
         -- </1.5b>
     })
 
@@ -219,13 +226,13 @@ test:do_test(
 test:do_test(
     "1.5c",
     function()
-        return test:execsql [[
+        return test:catchsql [[
             EXPLAIN QUERY PLAN
             SELECT name FROM album JOIN track USING (aid) ORDER BY title, tn DESC
         ]]
     end, {
         -- <1.5c>
-        "~/ORDER BY/"
+        1, "ORDER BY does not support different sorting orders"
         -- </1.5c>
     })
 
@@ -447,12 +454,12 @@ test:do_test(
 test:do_test(
     "3.1a",
     function()
-        return test:execsql [[
+        return test:catchsql [[
             SELECT name FROM album CROSS JOIN track USING (aid) ORDER BY title, tn DESC
         ]]
     end, {
         -- <3.1a>
-        "one-c", "one-a", "two-b", "two-a", "three-c", "three-a"
+        1, "ORDER BY does not support different sorting orders"
         -- </3.1a>
     })
 
@@ -461,13 +468,13 @@ test:do_test(
 test:do_test(
     "3.1b",
     function()
-        return test:execsql [[
+        return test:catchsql [[
             EXPLAIN QUERY PLAN
             SELECT name FROM album CROSS JOIN track USING (aid) ORDER BY title, tn DESC
         ]]
     end, {
         -- <3.1b>
-        "~/ORDER BY/"
+        1, "ORDER BY does not support different sorting orders"
         -- </3.1b>
     })
 
@@ -478,12 +485,12 @@ test:do_test(
 test:do_test(
     "3.2a",
     function()
-        return test:execsql [[
+        return test:catchsql [[
             SELECT name FROM album JOIN track USING (aid) ORDER BY +title, +tn DESC
         ]]
     end, {
         -- <3.2a>
-        "one-c", "one-a", "two-b", "two-a", "three-c", "three-a"
+        1, "ORDER BY does not support different sorting orders"
         -- </3.2a>
     })
 
@@ -492,13 +499,13 @@ test:do_test(
 test:do_test(
     "3.2b",
     function()
-        return test:execsql [[
+        return test:catchsql [[
             EXPLAIN QUERY PLAN
             SELECT name FROM album JOIN track USING (aid) ORDER BY +title, +tn DESC
         ]]
     end, {
         -- <3.2b>
-        "/ORDER BY/"
+        1, "ORDER BY does not support different sorting orders"
         -- </3.2b>
     })
 
@@ -510,12 +517,12 @@ test:do_test(
     function()
         -- X(374, "X!cmd", [=[["optimization_control","db","order-by-idx-join","0"]]=])
         -- db("cache", "flush")
-        return test:execsql [[
+        return test:catchsql [[
             SELECT name FROM album JOIN track USING (aid) ORDER BY title, tn DESC
         ]]
     end, {
         -- <3.3a>
-        "one-c", "one-a", "two-b", "two-a", "three-c", "three-a"
+        1, "ORDER BY does not support different sorting orders"
         -- </3.3a>
     })
 
@@ -620,25 +627,25 @@ test:do_test(
 test:do_test(
     "3.6a",
     function()
-        return test:execsql [[
+        return test:catchsql [[
             SELECT name FROM album CROSS JOIN track USING (aid) ORDER BY title DESC, tn
         ]]
     end, {
         -- <3.6a>
-        "three-a", "three-c", "two-a", "two-b", "one-a", "one-c"
+        1, "ORDER BY does not support different sorting orders"
         -- </3.6a>
     })
 
 test:do_test(
     "3.6b",
     function()
-        return test:execsql [[
+        return test:catchsql [[
             SELECT name FROM album CROSS JOIN track USING (aid)
              ORDER BY +title DESC, +tn
         ]]
     end, {
         -- <3.6b>
-        "three-a", "three-c", "two-a", "two-b", "one-a", "one-c"
+        1, "ORDER BY does not support different sorting orders"
         -- </3.6b>
     })
 
@@ -646,13 +653,13 @@ test:do_test(
 test:do_test(
     "3.6c",
     function()
-        return test:execsql [[
+        return test:catchsql [[
             EXPLAIN QUERY PLAN
             SELECT name FROM album CROSS JOIN track USING (aid) ORDER BY title DESC, tn
         ]]
     end, {
         -- <3.6c>
-        "~/ORDER BY/"
+        1, "ORDER BY does not support different sorting orders"
         -- </3.6c>
     })
 
@@ -725,7 +732,7 @@ test:do_execsql_test(
 -- verifies that a PseudoTable cursor is not closed prematurely in a deeply
 -- nested query.  This test caused a segfault on 3.8.5 beta.
 --
-test:do_execsql_test(
+test:do_catchsql_test(
     6.0,
     [[
         CREATE TABLE abc(a INT primary key, b INT, c INT);
@@ -740,7 +747,7 @@ test:do_execsql_test(
         FROM abc;
     ]], {
         -- <6.0>
-        "hardware", "hardware", "hardware"
+        1, "ORDER BY does not support different sorting orders"
         -- </6.0>
     })
 

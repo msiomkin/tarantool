@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(319)
+test:plan(152)
 
 --!./tcltestrunner.lua
 -- 2013 March 13
@@ -18,6 +18,24 @@ test:plan(319)
 -- ["set","testdir",[["file","dirname",["argv0"]]]]
 -- ["source",[["testdir"],"\/tester.tcl"]]
 testprefix = "tkt-4dd95f6943"
+
+-- NOTE: many tests in this file are commented, because
+-- different sort orders in ORDER BY clauses are TEMPORARY
+-- disabled because of the problem described in tickets
+-- #4038 and #3309. Please, uncomment these tests when different
+-- orders will be allowed again. If you see that test below
+-- starts failing, then it is probably the time to uncomment
+-- tests.
+test:do_catchsql_test(
+    0.0,
+    [[
+        CREATE TABLE t0(id INT primary key, x INT);
+        INSERT INTO t0 VALUES(1,3), (3,1);
+        SELECT * FROM t0 ORDER BY id DESC, x;
+    ]],
+    {1, "ORDER BY does not support different sorting orders"}
+)
+
 test:do_execsql_test(
     1.0,
     [[
@@ -113,21 +131,21 @@ for tn1, idx in ipairs(indexes) do
                 1, 2, 1, 4, 1, 5
             })
 
-        test:do_execsql_test(
-            string.format("2.%s.%s.2", tn1, tn2),
-            string.format([[
-                SELECT x, y FROM t2 WHERE x = 2 AND y IN %s ORDER BY x ASC, y DESC;
-            ]], inexpr), {
-                2, 5, 2, 4, 2, 2
-            })
+        --test:do_execsql_test(
+        --    string.format("2.%s.%s.2", tn1, tn2),
+        --    string.format([[
+        --        SELECT x, y FROM t2 WHERE x = 2 AND y IN %s ORDER BY x ASC, y DESC;
+        --    ]], inexpr), {
+        --        2, 5, 2, 4, 2, 2
+        --    })
 
-        test:do_execsql_test(
-            string.format("2.%s.%s.3", tn1, tn2),
-            string.format([[
-                SELECT x, y FROM t2 WHERE x = 3 AND y IN %s ORDER BY x DESC, y ASC;
-            ]], inexpr), {
-                3, 2, 3, 4, 3, 5
-            })
+        --test:do_execsql_test(
+        --    string.format("2.%s.%s.3", tn1, tn2),
+        --    string.format([[
+        --        SELECT x, y FROM t2 WHERE x = 3 AND y IN %s ORDER BY x DESC, y ASC;
+        --    ]], inexpr), {
+        --        3, 2, 3, 4, 3, 5
+        --    })
 
         test:do_execsql_test(
             string.format("2.%s.%s.4", tn1, tn2),
@@ -155,50 +173,50 @@ for tn1, idx in ipairs(indexes) do
                 2, 1, 2, 2, 1, 4, 2, 1, 5
             })
 
-        test:do_execsql_test(
-            string.format("2.%s.%s.7", tn1, tn2),
-            string.format([[
-                SELECT a, x, y FROM t2, t3 WHERE a = 4 AND x = 1 AND y IN %s 
-                ORDER BY a, x ASC, y DESC;
-            ]], inexpr), {
-                4, 1, 5, 4, 1, 4, 4, 1, 2
-            })
+        --test:do_execsql_test(
+        --    string.format("2.%s.%s.7", tn1, tn2),
+        --    string.format([[
+        --        SELECT a, x, y FROM t2, t3 WHERE a = 4 AND x = 1 AND y IN %s
+        --        ORDER BY a, x ASC, y DESC;
+        --    ]], inexpr), {
+        --        4, 1, 5, 4, 1, 4, 4, 1, 2
+        --    })
 
-        test:do_execsql_test(
-            "2."..tn1..".8",
-            string.format([[
-                SELECT a, x, y FROM t2, t3 WHERE a = 2 AND x = 1 AND y IN %s 
-                ORDER BY x ASC, y DESC;
-            ]], inexpr), {
-                2, 1, 5, 2, 1, 4, 2, 1, 2
-            })
+        --test:do_execsql_test(
+        --    "2."..tn1..".8",
+        --    string.format([[
+        --        SELECT a, x, y FROM t2, t3 WHERE a = 2 AND x = 1 AND y IN %s
+        --        ORDER BY x ASC, y DESC;
+        --    ]], inexpr), {
+        --        2, 1, 5, 2, 1, 4, 2, 1, 2
+        --    })
 
-        test:do_execsql_test(
-            string.format("2.%s.%s.9", tn1, tn2),
-            string.format([[
-                SELECT a, x, y FROM t2, t3 WHERE a = 4 AND x = 1 AND y IN %s 
-                ORDER BY a, x DESC, y ASC;
-            ]], inexpr), {
-                4, 1, 2, 4, 1, 4, 4, 1, 5
-            })
+        --test:do_execsql_test(
+        --    string.format("2.%s.%s.9", tn1, tn2),
+        --    string.format([[
+        --        SELECT a, x, y FROM t2, t3 WHERE a = 4 AND x = 1 AND y IN %s
+        --        ORDER BY a, x DESC, y ASC;
+        --    ]], inexpr), {
+        --        4, 1, 2, 4, 1, 4, 4, 1, 5
+        --    })
 
-        test:do_execsql_test(
-            "2."..tn1..".10",
-            string.format([[
-                SELECT a, x, y FROM t2, t3 WHERE a = 2 AND x = 1 AND y IN %s 
-                ORDER BY x DESC, y ASC;
-            ]], inexpr), {
-                2, 1, 2, 2, 1, 4, 2, 1, 5
-            })
+        --test:do_execsql_test(
+        --    "2."..tn1..".10",
+        --    string.format([[
+        --        SELECT a, x, y FROM t2, t3 WHERE a = 2 AND x = 1 AND y IN %s
+        --        ORDER BY x DESC, y ASC;
+        --    ]], inexpr), {
+        --        2, 1, 2, 2, 1, 4, 2, 1, 5
+        --    })
 
-        test:do_execsql_test(
-            string.format("2.%s.%s.11", tn1, tn2),
-            string.format([[
-                SELECT a, x, y FROM t2, t3 WHERE a = 4 AND x = 1 AND y IN %s 
-                ORDER BY a, x DESC, y DESC;
-            ]], inexpr), {
-                4, 1, 5, 4, 1, 4, 4, 1, 2
-            })
+        --test:do_execsql_test(
+        --    string.format("2.%s.%s.11", tn1, tn2),
+        --    string.format([[
+        --        SELECT a, x, y FROM t2, t3 WHERE a = 4 AND x = 1 AND y IN %s
+        --        ORDER BY a, x DESC, y DESC;
+        --    ]], inexpr), {
+        --        4, 1, 5, 4, 1, 4, 4, 1, 2
+        --    })
 
         test:do_execsql_test(
             string.format("2.%s.%s.12", tn1, tn2),

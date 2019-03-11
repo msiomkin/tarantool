@@ -189,33 +189,36 @@ test:do_execsql_test(
         -- </sort-1.8.3>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "sort-1.9",
     [[
         SELECT n FROM t1 ORDER BY log, flt DESC
     ]], {
         -- <sort-1.9>
-        1, 3, 2, 7, 6, 4, 5, 8
+        1, "ORDER BY does not support different sorting orders",
+        --1, 3, 2, 7, 6, 4, 5, 8
         -- </sort-1.9>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "sort-1.9.1",
     [[
         SELECT n FROM t1 ORDER BY log ASC, flt DESC
     ]], {
         -- <sort-1.9.1>
-        1, 3, 2, 7, 6, 4, 5, 8
+        1, "ORDER BY does not support different sorting orders"
+        --1, 3, 2, 7, 6, 4, 5, 8
         -- </sort-1.9.1>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "sort-1.10",
     [[
         SELECT n FROM t1 ORDER BY log DESC, flt
     ]], {
         -- <sort-1.10>
-        8, 5, 4, 6, 7, 2, 3, 1
+        1, "ORDER BY does not support different sorting orders"
+        --8, 5, 4, 6, 7, 2, 3, 1
         -- </sort-1.10>
     })
 
@@ -427,23 +430,25 @@ test:do_execsql_test(
         -- </sort-5.1>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "sort-5.2",
     [[
         select a from t3 order by b, a desc;
     ]], {
         -- <sort-5.2>
-        6, 5, 3, 2, 1, 4
+        1, "ORDER BY does not support different sorting orders"
+        --6, 5, 3, 2, 1, 4
         -- </sort-5.2>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "sort-5.3",
     [[
         select a from t3 order by b desc, a;
     ]], {
         -- <sort-5.3>
-        4, 1, 2, 3, 5, 6
+        1, "ORDER BY does not support different sorting orders"
+        --4, 1, 2, 3, 5, 6
         -- </sort-5.3>
     })
 
@@ -468,23 +473,25 @@ test:do_execsql_test(
         -- </sort-6.1>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "sort-6.2",
     [[
         select a from t3 order by b, a desc;
     ]], {
         -- <sort-6.2>
-        6, 5, 3, 2, 1, 4
+        1, "ORDER BY does not support different sorting orders"
+        --6, 5, 3, 2, 1, 4
         -- </sort-6.2>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "sort-6.3",
     [[
         select a from t3 order by b desc, a;
     ]], {
         -- <sort-6.3>
-        4, 1, 2, 3, 5, 6
+        1, "ORDER BY does not support different sorting orders"
+        --4, 1, 2, 3, 5, 6
         -- </sort-6.3>
     })
 

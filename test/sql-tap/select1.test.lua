@@ -855,34 +855,37 @@ test:do_catchsql_test(
     })
 
 -- MUST_WORK_TEST
-test:do_execsql_test(
+test:do_catchsql_test(
     "select1-4.11",
     [[
         INSERT INTO t5 VALUES(3,10);
         SELECT * FROM t5 ORDER BY 2, 1 DESC;
     ]], {
         -- <select1-4.11>
-        2, 9, 3, 10, 1, 10
+        1, "ORDER BY does not support different sorting orders"
+        --2, 9, 3, 10, 1, 10
         -- </select1-4.11>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "select1-4.12",
     [[
         SELECT * FROM t5 ORDER BY 1 DESC, b;
     ]], {
         -- <select1-4.12>
-        3, 10, 2, 9, 1, 10
+        1, "ORDER BY does not support different sorting orders"
+        --3, 10, 2, 9, 1, 10
         -- </select1-4.12>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "select1-4.13",
     [[
         SELECT * FROM t5 ORDER BY b DESC, 1;
     ]], {
         -- <select1-4.13>
-        1, 10, 3, 10, 2, 9
+        1, "ORDER BY does not support different sorting orders"
+        --1, 10, 3, 10, 2, 9
         -- </select1-4.13>
     })
 

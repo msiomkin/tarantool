@@ -1809,6 +1809,21 @@ sqlExprListSetSortOrder(struct ExprList *p, enum sort_order sort_order)
 	p->a[p->nExpr - 1].sort_order = sort_order;
 }
 
+void
+sql_check_sort_orders(ExprList * expr_list, Parse *parse) {
+	if(expr_list == NULL)
+		return;
+	for (int i = 0; i < expr_list->nExpr; i++) {
+		assert(expr_list->a[i].sort_order != SORT_ORDER_UNDEF);
+		if (expr_list->a[i].sort_order != expr_list->a[0].sort_order) {
+			diag_set(ClientError, ER_UNSUPPORTED, "ORDER BY",
+				 "different sorting orders");
+			sql_parser_error(parse);
+			return;
+		}
+	}
+}
+
 /*
  * Set the ExprList.a[].zName element of the most recently added item
  * on the expression list.

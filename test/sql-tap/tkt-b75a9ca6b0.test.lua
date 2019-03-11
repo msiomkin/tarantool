@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(22)
+test:plan(21)
 
 --!./tcltestrunner.lua
 -- 2014-04-21
@@ -44,32 +44,35 @@ local tblscan = {0, 0, 0, "SCAN TABLE T1"}
 local grpsort = {0, 0, 0, "USE TEMP B-TREE FOR GROUP BY"}
 local sort = {0, 0, 0, "USE TEMP B-TREE FOR ORDER BY"}
 local eqps = {
-    {"SELECT x,y FROM t1 GROUP BY x, y ORDER BY x,y", {1, 3,  2, 2,  3, 1}, {idxscan}},
-    {"SELECT x,y FROM t1 GROUP BY x, y ORDER BY x", {1, 3, 2, 2, 3, 1}, {idxscan, sort}},
-    {"SELECT x,y FROM t1 GROUP BY y, x ORDER BY y, x", {3, 1, 2, 2, 1, 3}, {idxscan, sort}},
-    {"SELECT x,y FROM t1 GROUP BY x ORDER BY x", {1, 3, 2, 2, 3, 1}, {idxscan}},
+    {"SELECT x,y FROM t1 GROUP BY x, y ORDER BY x,y", {0, {1, 3,  2, 2,  3, 1}}, {idxscan}},
+    {"SELECT x,y FROM t1 GROUP BY x, y ORDER BY x", {0, {1, 3, 2, 2, 3, 1}}, {idxscan, sort}},
+    {"SELECT x,y FROM t1 GROUP BY y, x ORDER BY y, x", {0, {3, 1, 2, 2, 1, 3}}, {idxscan, sort}},
+    {"SELECT x,y FROM t1 GROUP BY x ORDER BY x", {0, {1, 3, 2, 2, 3, 1}}, {idxscan}},
     -- idxscan->tblscan after reorderind indexes list
     -- but it does not matter
-    {"SELECT x,y FROM t1 GROUP BY y ORDER BY y", {3, 1, 2, 2, 1, 3}, {tblscan, grpsort}},
+    {"SELECT x,y FROM t1 GROUP BY y ORDER BY y", {0, {3, 1, 2, 2, 1, 3}}, {tblscan, grpsort}},
     -- idxscan->tblscan after reorderind indexes list
     -- but it does not matter (because it does full scan)
-    {"SELECT x,y FROM t1 GROUP BY y ORDER BY x", {1, 3, 2, 2, 3, 1}, {tblscan, grpsort, sort}},
-    {"SELECT x,y FROM t1 GROUP BY x, y ORDER BY x, y DESC", {1, 3, 2, 2, 3, 1}, {idxscan, sort}},
-    {"SELECT x,y FROM t1 GROUP BY x, y ORDER BY x DESC, y DESC", {3, 1, 2, 2, 1, 3}, {idxscan, sort}},
-    {"SELECT x,y FROM t1 GROUP BY x, y ORDER BY x ASC, y ASC", {1, 3, 2, 2, 3, 1}, {idxscan}},
-    {"SELECT x,y FROM t1 GROUP BY x, y ORDER BY x COLLATE \"unicode_ci\", y", {1, 3, 2, 2, 3, 1}, {idxscan, sort}},
+    {"SELECT x,y FROM t1 GROUP BY y ORDER BY x", {0, {1, 3, 2, 2, 3, 1}}, {tblscan, grpsort, sort}},
+    {"SELECT x,y FROM t1 GROUP BY x, y ORDER BY x, y DESC", {1, "ORDER BY does not support different sorting orders"}, {idxscan, sort}},
+    --{"SELECT x,y FROM t1 GROUP BY x, y ORDER BY x, y DESC", {0, {1, 3, 2, 2, 3, 1}}, {idxscan, sort}},
+    {"SELECT x,y FROM t1 GROUP BY x, y ORDER BY x DESC, y DESC", {0, {3, 1, 2, 2, 1, 3}}, {idxscan, sort}},
+    {"SELECT x,y FROM t1 GROUP BY x, y ORDER BY x ASC, y ASC", {0, {1, 3, 2, 2, 3, 1}}, {idxscan}},
+    {"SELECT x,y FROM t1 GROUP BY x, y ORDER BY x COLLATE \"unicode_ci\", y", {0, {1, 3, 2, 2, 3, 1}}, {idxscan, sort}},
 }
 for tn, val in ipairs(eqps) do
     local q = val[1]
     local res = val[2]
     local eqp = val[3]
-    test:do_execsql_test(
+    test:do_catchsql_test(
         "1."..tn..".1",
         q, res)
 
-    test:do_eqp_test(
-        "1."..tn..".2",
-        q, eqp)
+    if res[1] == 0 then
+        test:do_eqp_test(
+            "1."..tn..".2",
+            q, eqp)
+    end
 
 end
 test:finish_test()

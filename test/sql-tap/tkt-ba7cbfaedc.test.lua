@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(19)
+test:plan(12)
 
 --!./tcltestrunner.lua
 -- 2014-10-11
@@ -19,6 +19,24 @@ test:plan(19)
 -- ["set","testdir",[["file","dirname",["argv0"]]]]
 -- ["source",[["testdir"],"\/tester.tcl"]]
 testprefix = "tkt-ba7cbfaedc"
+
+-- NOTE: some tests in this file are commented, because
+-- different sort orders in ORDER BY clauses are TEMPORARY
+-- disabled because of the problem described in tickets
+-- #4038 and #3309. Please, uncomment these tests when different
+-- orders will be allowed again. If you see that test below
+-- starts failing, then it is probably the time to uncomment
+-- tests.
+test:do_catchsql_test(
+    0.0,
+    [[
+        CREATE TABLE t0(id INT primary key, x INT);
+        INSERT INTO t0 VALUES(1,3), (3,1);
+        SELECT * FROM t0 ORDER BY id DESC, x;
+    ]],
+    {1, "ORDER BY does not support different sorting orders"}
+)
+
 test:do_execsql_test(
     1,
     [[
@@ -49,8 +67,8 @@ for n, idx in ipairs(idxs) do
     test:execsql(idx)
     local queries = {
         {"GROUP BY x, y ORDER BY x, y", {1, 'a', 1, "b", 2, "a", 2, "b", 3, "a", 3, "b"}},
-        {"GROUP BY x, y ORDER BY x DESC, y", {3, "a", 3, "b", 2, "a", 2, "b", 1, "a", 1, "b"}},
-        {"GROUP BY x, y ORDER BY x, y DESC", {1, "b", 1, "a", 2, "b", 2, "a", 3, "b", 3, "a"}},
+        --{"GROUP BY x, y ORDER BY x DESC, y", {3, "a", 3, "b", 2, "a", 2, "b", 1, "a", 1, "b"}},
+        --{"GROUP BY x, y ORDER BY x, y DESC", {1, "b", 1, "a", 2, "b", 2, "a", 3, "b", 3, "a"}},
         {"GROUP BY x, y ORDER BY x DESC, y DESC", {3, "b", 3, "a", 2, "b", 2, "a", 1, "b", 1, "a"}},
     }
     for tn, val in ipairs(queries) do

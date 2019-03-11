@@ -541,7 +541,8 @@ test:do_catchsql_test(
         ORDER BY 1, 2 DESC;
     ]], {
         -- <select4-5.2j>
-        0, {1, 5, 1, 4, 1, 3, 1, 2, 1, 1, 1, 0, 2, 8, 2, 7, 2, 6, 2, 5}
+        1, "ORDER BY does not support different sorting orders"
+        --0, {1, 5, 1, 4, 1, 3, 1, 2, 1, 1, 1, 0, 2, 8, 2, 7, 2, 6, 2, 5}
         -- </select4-5.2j>
     })
 
