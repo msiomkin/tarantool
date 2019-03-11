@@ -1,6 +1,6 @@
 fiber = require('fiber')
 env = require('test_run')
-replica_set = require('fast_replica')
+replica_set = require('fast_vreplica')
 test_run = env.new()
 engine = test_run:get_cfg('engine')
 
