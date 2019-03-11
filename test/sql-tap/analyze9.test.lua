@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(121)
+test:plan(99)
 
 testprefix = "analyze9"
 
@@ -342,24 +342,25 @@ test:do_test(
         for i = 0, 9999, 10 do
             test:execsql(" INSERT INTO t1 VALUES('x', "..i..") ")
         end
-        return test:execsql([[
+        return #test:execsql([[
             ANALYZE;
             SELECT * FROM stat_view WHERE idx = 'I1';
         ]])
-        end, {
+        end,
             -- <4.8>
-            25
+            35
             -- </4.8>
-        })
+        )
 
 test:do_execsql_test(
     4.9,
     [[
-        SELECT msgpack_decode_sample("sample") FROM "_sql_stat4";
+        SELECT sample FROM stat_view;
     ]], {
         -- <4.9>
-        "x", "1110", "2230", "2750", "3350", "4090", "4470", "4980", "5240", "5280", "5290", "5590", "5920",
-        "5930", "6220", "6710", "7000", "7710", "7830", "7970", "8890", "8950", "9240", "9250", "9680"
+        1110,2230,2750,3350,4090,4470,4980,5240,5280,5290,5590,5920,5930,6220,
+        6710,7000,7710,7830,7970,8890,8950,9240,9250,9680,
+        "x","x","x","x","x","x","x","x"
         -- </4.9>
     })
 
@@ -392,47 +393,6 @@ test:do_execsql_test(
         SELECT * FROM t1 WHERE a = 'abc';
     ]])
 
----------------------------------------------------------------------------
--- The following tests experiment with adding corrupted records to the
--- 'sample' column of the _sql_stat4 table.
---
-local get_pk = function (space, record)
-    local pkey = {}
-    for _, part in pairs(space.index[0].parts) do
-        table.insert(pkey, record[part.fieldno])
-    end
-    return pkey
-end
-
-local inject_stat_error_func = function (space_name)
-    local space = box.space[space_name]
-    local record = space:select({"T1", "I1", nil}, {limit = 1})[1]
-    space:delete(get_pk(space, record))
-    local record_new = {}
-    for i = 1,#record-1 do record_new[i] = record[i] end
-    record_new[#record] = ''
-    space:insert(record_new)
-    return 0
-end
-
-box.internal.sql_create_function("inject_stat_error", "INT", inject_stat_error_func)
-
-test:do_execsql_test(
-    7.1,
-    [[
-        DROP TABLE IF EXISTS t1;
-        CREATE TABLE t1(id INTEGER PRIMARY KEY AUTOINCREMENT, a INT , b INT );
-        CREATE INDEX i1 ON t1(a, b);
-        INSERT INTO t1 VALUES(null, 1, 1);
-        INSERT INTO t1 VALUES(null, 2, 2);
-        INSERT INTO t1 VALUES(null, 3, 3);
-        INSERT INTO t1 VALUES(null, 4, 4);
-        INSERT INTO t1 VALUES(null, 5, 5);
-        ANALYZE;
-        SELECT inject_stat_error('_sql_stat4');
-        ANALYZE;
-    ]])
-
 -- Doesn't work due to the fact that in Tarantool rowid has been removed,
 -- and tbl, idx and sample have been united into primary key.
 -- test:do_execsql_test(
@@ -446,44 +406,6 @@ test:do_execsql_test(
 --        1, 1
 --        -- </7.2>
 --    })
-
-test:do_execsql_test(
-    7.3,
-    [[
-        UPDATE "_sql_stat4" SET "neq" = '0 0 0';
-        ANALYZE;
-        SELECT * FROM t1 WHERE a = 1;
-    ]], {
-        -- <7.3>
-        1, 1, 1
-        -- </7.3>
-    })
-
-test:do_execsql_test(
-    7.4,
-    [[
-        ANALYZE;
-        UPDATE "_sql_stat4" SET "ndlt" = '0 0 0';
-        ANALYZE;
-        SELECT * FROM t1 WHERE a = 3;
-    ]], {
-        -- <7.4>
-        3, 3, 3
-        -- </7.4>
-    })
-
-test:do_execsql_test(
-    7.5,
-    [[
-        ANALYZE;
-        UPDATE "_sql_stat4" SET "nlt" = '0 0 0';
-        ANALYZE;
-        SELECT * FROM t1 WHERE a = 5;
-    ]], {
-        -- <7.5>
-        5, 5, 5
-        -- </7.5>
-    })
 
 ---------------------------------------------------------------------------
 --
@@ -1225,12 +1147,12 @@ test:do_test(
             test:execsql(string.format("INSERT INTO t1 VALUES(%s, 0);", i))
         end
         test:execsql("ANALYZE")
-        return test:execsql([[ SELECT count(*) FROM "_sql_stat4" WHERE "idx" = 'I1'; ]])
-    end, {
+        return #test:execsql([[ SELECT neq FROM stat_view WHERE idx = 'I1'; ]])
+    end,
         -- <18.1>
         9
         -- </18.1>
-    })
+    )
 
 ---------------------------------------------------------------------------
 
@@ -1266,17 +1188,6 @@ test:do_execsql_test(
         -- <20.2>
         -- </20.2>
     })
-
-for i = 0, 15 do
-    test:do_test(
-        "20.3."..i,
-        function()
-            return test:execsql(string.format(
-                [[SELECT count(*) FROM "_sql_stat4" WHERE "idx" = 'I1' AND lrange(msgpack_decode_sample("sample"), 1, 1) = '%s']], i))
-        end, {
-            1
-        })
-end
 
 ---------------------------------------------------------------------------
 --
