@@ -662,7 +662,7 @@ using_opt(U) ::= .                        {U = 0;}
 
 orderby_opt(A) ::= .                          {A = 0;}
 orderby_opt(A) ::= ORDER BY sortlist(X). {
-  sql_check_sort_orders(X, pParse);
+  sql_expr_check_sort_orders(pParse, X);
   A = X;
 }
 sortlist(A) ::= sortlist(A) COMMA expr(Y) sortorder(Z). {

@@ -1810,12 +1810,15 @@ sqlExprListSetSortOrder(struct ExprList *p, enum sort_order sort_order)
 }
 
 void
-sql_check_sort_orders(ExprList * expr_list, Parse *parse) {
+sql_expr_check_sort_orders(struct Parse *parse,
+			   const struct ExprList *expr_list)
+{
 	if(expr_list == NULL)
 		return;
-	for (int i = 0; i < expr_list->nExpr; i++) {
+	enum sort_order reference_order = expr_list->a[0].sort_order;
+	for (int i = 1; i < expr_list->nExpr; i++) {
 		assert(expr_list->a[i].sort_order != SORT_ORDER_UNDEF);
-		if (expr_list->a[i].sort_order != expr_list->a[0].sort_order) {
+		if (expr_list->a[i].sort_order != reference_order) {
 			diag_set(ClientError, ER_UNSUPPORTED, "ORDER BY",
 				 "different sorting orders");
 			sql_parser_error(parse);
