@@ -97,6 +97,8 @@ struct key_part {
 	char *path;
 	/** The length of JSON path. */
 	uint32_t path_len;
+	/** True if this is multikey key part. */
+	bool is_multikey;
 	/**
 	 * Epoch of the tuple format the offset slot cached in
 	 * this part is valid for, see tuple_format::epoch.
@@ -205,6 +207,8 @@ struct key_def {
 	bool is_nullable;
 	/** True if some key part has JSON path. */
 	bool has_json_paths;
+	/** True if some part has array index placeholder *. */
+	bool has_multikey_parts;
 	/**
 	 * True, if some key parts can be absent in a tuple. These
 	 * fields assumed to be MP_NIL.
@@ -699,6 +703,7 @@ key_hash(const char *key, struct key_def *key_def)
  * Get a comparison hint for a @a tuple.
  * @param tuple - tuple to get uint64_t of.
  * @param key_def - key_def that defines which comparison is used.
+ * @param multikey_idx - index of multikey array item.
  * @return the comparison auxiliary information.
  */
 static inline uint64_t
