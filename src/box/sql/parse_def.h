@@ -84,6 +84,8 @@ struct Token {
 	bool isReserved;
 };
 
+#define Token_nil ((struct Token) {NULL, 0, false})
+
 /**
  * Structure representing foreign keys constraints appeared
  * within CREATE TABLE statement. Used only during parsing.
@@ -131,7 +133,11 @@ enum entity_type {
 	ENTITY_TYPE_TRIGGER,
 	ENTITY_TYPE_CK,
 	ENTITY_TYPE_FK,
-	entity_type_MAX
+	/**
+	 * For assertion checks that constraint definition is
+	 * created before initialization of a term constraint.
+	 */
+	ENTITY_TYPE_CONSTRAINT,
 };
 
 enum alter_action {
@@ -246,92 +252,91 @@ struct create_index_def {
 /** Basic initialisers of parse structures.*/
 static inline void
 alter_entity_def_init(struct alter_entity_def *alter_def,
-		      struct SrcList *entity_name)
+		      struct SrcList *entity_name, enum entity_type type,
+		      enum alter_action action)
 {
 	alter_def->entity_name = entity_name;
+	alter_def->entity_type = type;
+	alter_def->alter_action = action;
 }
 
 static inline void
 rename_entity_def_init(struct rename_entity_def *rename_def,
-		       struct SrcList *table_name, struct Token new_name)
+		       struct SrcList *table_name, struct Token *new_name)
 {
-	alter_entity_def_init(&rename_def->base, table_name);
-	rename_def->new_name = new_name;
-	struct alter_entity_def *alter_def =
-		(struct alter_entity_def *) rename_def;
-	alter_def->entity_type = ENTITY_TYPE_TABLE;
-	alter_def->alter_action = ALTER_ACTION_RENAME;
+	alter_entity_def_init(&rename_def->base, table_name, ENTITY_TYPE_TABLE,
+			      ALTER_ACTION_RENAME);
+	rename_def->new_name = *new_name;
 }
 
 static inline void
-create_entity_def_init(struct create_entity_def *create_def, struct Token name,
-		       bool if_not_exist)
+create_entity_def_init(struct create_entity_def *create_def,
+		       enum entity_type type, struct SrcList *parent_name,
+		       struct Token *name, bool if_not_exist)
 {
-	create_def->name = name;
+	alter_entity_def_init(&create_def->base, parent_name, type,
+			      ALTER_ACTION_CREATE);
+	create_def->name = *name;
 	create_def->if_not_exist = if_not_exist;
 }
 
 static inline void
 create_constraint_def_init(struct create_constraint_def *constr_def,
-			   struct SrcList *parent_name, struct Token name,
+			   struct SrcList *parent_name, struct Token *name,
 			   bool if_not_exists, bool is_deferred)
 {
-	alter_entity_def_init(&constr_def->base.base, parent_name);
-	create_entity_def_init(&constr_def->base, name, if_not_exists);
+	create_entity_def_init(&constr_def->base, ENTITY_TYPE_CONSTRAINT,
+			       parent_name, name, if_not_exists);
 	constr_def->is_deferred = is_deferred;
 }
 
 static inline void
 drop_entity_def_init(struct drop_entity_def *drop_def,
-		     struct SrcList *parent_name, struct Token name,
+		     struct SrcList *parent_name, struct Token *name,
 		     bool if_exist, enum entity_type entity_type)
 {
-	alter_entity_def_init(&drop_def->base, parent_name);
-	drop_def->name = name;
+	alter_entity_def_init(&drop_def->base, parent_name, entity_type,
+			      ALTER_ACTION_DROP);
+	drop_def->name = *name;
 	drop_def->if_exist = if_exist;
-	drop_def->base.entity_type = entity_type;
-	drop_def->base.alter_action = ALTER_ACTION_DROP;
 }
 
 static inline void
 create_trigger_def_init(struct create_trigger_def *trigger_def,
-			struct SrcList *table_name, struct Token name,
+			struct SrcList *table_name, struct Token *name,
 			int tr_tm, int op, struct IdList *cols,
 			struct Expr *when, bool if_not_exists)
 {
-	alter_entity_def_init(&trigger_def->base.base, table_name);
-	create_entity_def_init(&trigger_def->base, name, if_not_exists);
+	create_entity_def_init(&trigger_def->base, ENTITY_TYPE_TRIGGER,
+			       table_name, name, if_not_exists);
 	trigger_def->tr_tm = tr_tm;
 	trigger_def->op = op;
 	trigger_def->cols = cols;
 	trigger_def->when = when;
-	struct alter_entity_def *alter_def =
-		(struct alter_entity_def *) trigger_def;
-	alter_def->entity_type = ENTITY_TYPE_TRIGGER;
-	alter_def->alter_action = ALTER_ACTION_CREATE;
 }
 
 static inline void
 create_ck_def_init(struct create_ck_def *ck_def, struct ExprSpan *expr)
 {
-	ck_def->expr = expr;
-	struct alter_entity_def *alter_def =
-		(struct alter_entity_def *) ck_def;
+	struct alter_entity_def *alter_def = (struct alter_entity_def *) ck_def;
+	assert(alter_def->alter_action == ALTER_ACTION_CREATE);
+	assert(alter_def->entity_type == ENTITY_TYPE_CONSTRAINT);
 	alter_def->entity_type = ENTITY_TYPE_CK;
-	alter_def->alter_action = ALTER_ACTION_CREATE;
+	ck_def->expr = expr;
 }
 
 static inline void
 create_index_def_init(struct create_index_def *index_def, struct ExprList *cols,
 		      enum sql_index_type idx_type, enum sort_order sort_order)
 {
+	struct alter_entity_def *alter_def =
+		(struct alter_entity_def *) index_def;
+	assert(alter_def->alter_action == ALTER_ACTION_CREATE);
+	assert(alter_def->entity_type == ENTITY_TYPE_CONSTRAINT);
+	alter_def->entity_type = ENTITY_TYPE_INDEX;
 	index_def->cols = cols;
 	index_def->idx_type = idx_type;
 	index_def->sort_order = sort_order;
-	struct alter_entity_def *alter_def =
-		(struct alter_entity_def *) index_def;
-	alter_def->entity_type = ENTITY_TYPE_INDEX;
-	alter_def->alter_action = ALTER_ACTION_CREATE;
 }
 
 static inline void
@@ -339,42 +344,35 @@ create_fk_def_init(struct create_fk_def *fk_def, struct ExprList *child_cols,
 		   struct Token *parent_name, struct ExprList *parent_cols,
 		   int actions)
 {
-	assert(fk_def != NULL);
+	struct alter_entity_def *alter_def = (struct alter_entity_def *) fk_def;
+	assert(alter_def->alter_action == ALTER_ACTION_CREATE);
+	assert(alter_def->entity_type == ENTITY_TYPE_CONSTRAINT);
+	alter_def->entity_type = ENTITY_TYPE_FK;
 	fk_def->child_cols = child_cols;
 	fk_def->parent_name = parent_name;
 	fk_def->parent_cols = parent_cols;
 	fk_def->actions = actions;
-	struct alter_entity_def *alter_def =
-		(struct alter_entity_def *) fk_def;
-	alter_def->entity_type = ENTITY_TYPE_FK;
-	alter_def->alter_action = ALTER_ACTION_CREATE;
 }
 
 static inline void
-create_table_def_init(struct create_table_def *table_def, struct Token name,
+create_table_def_init(struct create_table_def *table_def, struct Token *name,
 		      bool if_not_exists)
 {
-	create_entity_def_init(&table_def->base, name, if_not_exists);
+	create_entity_def_init(&table_def->base, ENTITY_TYPE_TABLE, NULL, name,
+			       if_not_exists);
 	rlist_create(&table_def->new_fkey);
-	struct alter_entity_def *alter_def =
-		(struct alter_entity_def *) table_def;
-	alter_def->entity_type = ENTITY_TYPE_TABLE;
-	alter_def->alter_action = ALTER_ACTION_CREATE;
 }
 
 static inline void
-create_view_def_init(struct create_view_def *view_def, struct Token name,
+create_view_def_init(struct create_view_def *view_def, struct Token *name,
 		     struct Token *create, struct ExprList *aliases,
 		     struct Select *select, bool if_not_exists)
 {
-	create_entity_def_init(&view_def->base, name, if_not_exists);
+	create_entity_def_init(&view_def->base, ENTITY_TYPE_VIEW, NULL, name,
+			       if_not_exists);
 	view_def->create_start = create;
 	view_def->select = select;
 	view_def->aliases = aliases;
-	struct alter_entity_def *alter_def =
-		(struct alter_entity_def *) view_def;
-	alter_def->entity_type = ENTITY_TYPE_VIEW;
-	alter_def->alter_action = ALTER_ACTION_CREATE;
 }
 
 static inline void

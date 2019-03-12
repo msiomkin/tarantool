@@ -2734,6 +2734,7 @@ struct Parse {
 		struct create_ck_def create_ck_def;
 		struct create_fk_def create_fk_def;
 		struct create_index_def create_index_def;
+		struct create_constraint_def create_constraint_def;
 		struct create_trigger_def create_trigger_def;
 		struct create_view_def create_view_def;
 		struct rename_entity_def rename_entity_def;
