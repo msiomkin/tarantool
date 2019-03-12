@@ -206,7 +206,7 @@ struct swim_member {
 	 */
 	struct tt_uuid uuid;
 	/**
-	 * Cached hash of the uuid for the members table lookups.
+	 * Cached hash of the uuid for the member table lookups.
 	 */
 	uint32_t hash;
 	/**
@@ -406,7 +406,8 @@ swim_new_member(struct swim *swim, const struct sockaddr_in *addr,
 		diag_set(OutOfMemory, sizeof(mh_int_t), "malloc", "node");
 		return NULL;
 	}
-	swim_ev_timer_start(loop(), &swim->round_tick);
+	if (mh_size(swim->members) > 1)
+		swim_ev_timer_start(loop(), &swim->round_tick);
 	say_verbose("SWIM %d: member %s is added, total is %d", swim_fd(swim),
 		    swim_uuid_str(&member->uuid), mh_size(swim->members));
 	return member;
@@ -550,7 +551,9 @@ swim_begin_step(struct ev_loop *loop, struct ev_timer *t, int events)
 	(void) events;
 	(void) loop;
 	struct swim *swim = (struct swim *) t->data;
-	if (rlist_empty(&swim->round_queue) && swim_new_round(swim) != 0) {
+	if (! rlist_empty(&swim->round_queue)) {
+		say_verbose("SWIM %d: continue the round", swim_fd(swim));
+	} else if (swim_new_round(swim) != 0) {
 		diag_log();
 		return;
 	}
@@ -675,6 +678,7 @@ swim_upsert_member(struct swim *swim, const struct swim_member_def *def)
 static int
 swim_process_anti_entropy(struct swim *swim, const char **pos, const char *end)
 {
+	say_verbose("SWIM %d: process anti-entropy", swim_fd(swim));
 	const char *prefix = "invalid anti-entropy message:";
 	uint32_t size;
 	if (swim_decode_array(pos, end, &size, prefix, "root") != 0)
@@ -726,8 +730,6 @@ swim_on_input(struct swim_scheduler *scheduler, const char *pos,
 			goto error;
 		switch(key) {
 		case SWIM_ANTI_ENTROPY:
-			say_verbose("SWIM %d: process anti-entropy",
-				    swim_fd(swim));
 			if (swim_process_anti_entropy(swim, &pos, end) != 0)
 				goto error;
 			break;
@@ -849,7 +851,6 @@ swim_cfg(struct swim *swim, const char *uri, double heartbeat_rate,
 	if (swim->round_tick.at != heartbeat_rate && heartbeat_rate > 0)
 		swim_ev_timer_set(&swim->round_tick, heartbeat_rate, 0);
 
-	swim_ev_timer_start(loop(), &swim->round_tick);
 	swim_update_member_addr(swim, swim->self, &addr);
 	int rc = swim_update_member_uuid(swim, swim->self, uuid);
 	/* Reserved above. */
@@ -892,7 +893,7 @@ swim_remove_member(struct swim *swim, const struct tt_uuid *uuid)
 	assert(swim_is_configured(swim));
 	const char *prefix = "swim.remove_member:";
 	if (uuid == NULL || tt_uuid_is_nil(uuid)) {
-		diag_set(SwimError, "%s UUiD is mandatory", prefix);
+		diag_set(SwimError, "%s UUID is mandatory", prefix);
 		return -1;
 	}
 	struct swim_member *member = swim_find_member(swim, uuid);
