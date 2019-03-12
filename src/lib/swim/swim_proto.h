@@ -1,5 +1,3 @@
-#ifndef TARANTOOL_SWIM_PROTO_H_INCLUDED
-#define TARANTOOL_SWIM_PROTO_H_INCLUDED
 /*
  * Copyright 2010-2019, Tarantool AUTHORS, please see AUTHORS file.
  *
@@ -64,6 +62,9 @@
  * +-------------------------------------------------------------+
  */
 
+#ifndef TARANTOOL_SWIM_PUBLIC_PROTO_H_INCLUDED
+#define TARANTOOL_SWIM_PUBLIC_PROTO_H_INCLUDED
+
 enum swim_member_status {
 	/** The instance is ok, responds to requests. */
 	MEMBER_ALIVE = 0,
@@ -71,6 +72,13 @@ enum swim_member_status {
 };
 
 extern const char *swim_member_status_strs[];
+
+#endif /* TARANTOOL_SWIM_PUBLIC_PROTO_H_INCLUDED */
+
+#ifdef SWIM_PUBLIC_API
+#undef SWIM_PUBLIC_API
+#elif !defined(TARANTOOL_SWIM_PRIVATE_PROTO_H_INCLUDED)
+#define TARANTOOL_SWIM_PRIVATE_PROTO_H_INCLUDED
 
 /**
  * SWIM member attributes from anti-entropy and dissemination
@@ -317,4 +325,4 @@ int
 swim_decode_uuid(struct tt_uuid *uuid, const char **pos, const char *end,
 		 const char *prefix, const char *param_name);
 
-#endif /* TARANTOOL_SWIM_PROTO_H_INCLUDED */
+#endif /* TARANTOOL_SWIM_PRIVATE_PROTO_H_INCLUDED */

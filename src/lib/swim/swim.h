@@ -31,6 +31,8 @@
  * SUCH DAMAGE.
  */
 #include <stdbool.h>
+#define SWIM_PUBLIC_API
+#include "swim_proto.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -111,6 +113,10 @@ swim_self(struct swim *swim);
  */
 const struct swim_member *
 swim_member_by_uuid(struct swim *swim, const struct tt_uuid *uuid);
+
+/** Member's current status. */
+enum swim_member_status
+swim_member_status(const struct swim_member *member);
 
 /**
  * Open an iterator to scan the whole member table. The iterator
