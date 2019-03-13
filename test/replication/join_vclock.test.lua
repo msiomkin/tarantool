@@ -28,7 +28,7 @@ errinj.set("ERRINJ_RELAY_FINAL_SLEEP", false)
 test_run:cmd("switch vreplica1")
 test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end, 100)
 cnt = box.space.test.index[0]:count()
-test_run:wait_cond(function() return box.space.test.index.primary:max()[1] == cnt - 1 end, 100)
+test_run:wait_cond(function() return box.space.test.index.primary:max()[1] == cnt - 1 end, 500)
 test_run:cmd("switch default")
 
 replica_set.drop_all(test_run)

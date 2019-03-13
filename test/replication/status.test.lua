@@ -111,7 +111,7 @@ test_run:cmd('switch default')
 box.space._schema:insert({'dup'})
 test_run:cmd('switch replica')
 r = box.info.replication[1]
-test_run:wait_cond(function() return r.upstream.status == 'stopped' end, 50)
+test_run:wait_cond(function() return r.upstream.status == 'stopped' end, 200)
 r.upstream.message:match('Duplicate') ~= nil
 test_run:cmd('switch default')
 box.space._schema:delete({'dup'})

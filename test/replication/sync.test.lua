@@ -35,7 +35,7 @@ function fill()
             local r = box.info.replication[2]
             return r ~= nil and r.downstream ~= nil and
                    r.downstream.status ~= 'stopped'
-        end, 10)
+        end, 50)
         for i = count + 101, count + 200 do
             box.space.test:replace{i}
         end
@@ -59,6 +59,7 @@ test_run:cmd("switch default")
 fill()
 test_run:cmd("switch replica")
 
+-----------------------------------------------------------------------------------------------------
 -- Resume replication.
 --
 -- Since max allowed lag is small, all records should arrive
@@ -79,6 +80,7 @@ test_run:cmd("switch default")
 fill()
 test_run:cmd("switch replica")
 
+-----------------------------------------------------------------------------------------------------
 -- Resume replication
 --
 -- Since max allowed lag is big, not all records will arrive
@@ -87,12 +89,10 @@ test_run:cmd("switch replica")
 --
 box.cfg{replication_sync_lag = 1}
 box.cfg{replication = replication}
-box.space.test:count() < 400
-test_run:wait_cond(function() return box.info.status == 'running' end, 10)
-box.info.ro -- false
+test_run:wait_cond(function() return box.space.test:count() == 400 or (box.space.test:count() < 400 and box.info.status == 'running' and box.info.ro) end, 50)
 
 -- Wait for remaining rows to arrive.
-test_run:wait_cond(function() return box.space.test:count() == 400 end, 20)
+test_run:wait_cond(function() return box.space.test:count() == 400 end, 50)
 
 -- Stop replication.
 replication = box.cfg.replication
@@ -103,6 +103,7 @@ test_run:cmd("switch default")
 fill()
 test_run:cmd("switch replica")
 
+-----------------------------------------------------------------------------------------------------
 -- Resume replication
 --
 -- Although max allowed lag is small, box.cfg() will fail to
@@ -111,16 +112,14 @@ test_run:cmd("switch replica")
 --
 box.cfg{replication_sync_lag = 0.001, replication_sync_timeout = 0.001}
 box.cfg{replication = replication}
-box.space.test:count() < 600
-test_run:wait_cond(function() return box.info.status == 'orphan' end, 10)
-box.info.ro -- true
+test_run:wait_cond(function() return box.space.test:count() == 600 or (box.space.test:count() < 600 and box.info.status == 'orphan' and box.info.ro) end, 50)
 
 -- Wait for remaining rows to arrive.
 test_run:wait_cond(function() return box.space.test:count() == 600 end, 100)
 
 -- Make sure replica leaves oprhan state.
-test_run:wait_cond(function() return box.info.status ~= 'orphan' end, 10)
-test_run:wait_cond(function() return box.info.status == 'running' end, 10)
+test_run:wait_cond(function() return box.info.status ~= 'orphan' end, 50)
+test_run:wait_cond(function() return box.info.status == 'running' end, 50)
 box.info.ro -- false
 
 -- gh-3636: Check that replica set sync doesn't stop on cfg errors.
@@ -131,9 +130,9 @@ box.info.ro -- false
 -- ER_CFG "duplicate connection with the same replica UUID" error.
 -- It should print it to the log, but keep trying to synchronize.
 -- Eventually, it should leave box.cfg() following the master.
-box.cfg{replication_timeout = 0.1}
-box.cfg{replication_sync_lag = 1}
-box.cfg{replication_sync_timeout = 10}
+box.cfg{replication_timeout = 0.01}
+box.cfg{replication_sync_lag = 0.1}
+box.cfg{replication_sync_timeout = 50}
 
 test_run:cmd("switch default")
 box.error.injection.set('ERRINJ_WAL_DELAY', true)
@@ -151,10 +150,10 @@ test_run:cmd("switch replica")
 replication = box.cfg.replication
 box.cfg{replication = {}}
 box.cfg{replication = replication}
-test_run:wait_cond(function() return box.info.status == 'running' end, 10)
+test_run:wait_cond(function() return box.info.status ~= 'orphan' end, 50)
 box.info.ro -- false
-test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end, 10)
-test_run:wait_log("replica", "ER_CFG.*", nil, 100)
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end, 50)
+test_run:wait_log("replica", "ER_CFG.*", nil, 200)
 
 test_run:cmd("switch default")
 test_run:cmd("stop server replica")
