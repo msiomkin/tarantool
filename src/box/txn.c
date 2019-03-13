@@ -427,17 +427,6 @@ txn_abort(struct txn *txn)
 	txn->is_aborted = true;
 }
 
-int
-txn_check_singlestatement(struct txn *txn, const char *where)
-{
-	if (!txn->is_autocommit || !txn_is_first_statement(txn)) {
-		diag_set(ClientError, ER_UNSUPPORTED,
-			 where, "multi-statement transactions");
-		return -1;
-	}
-	return 0;
-}
-
 int64_t
 box_txn_id(void)
 {

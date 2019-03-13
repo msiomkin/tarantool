@@ -309,14 +309,6 @@ void
 txn_rollback_stmt();
 
 /**
- * Raise an error if this is a multi-statement
- * transaction: DDL can not be part of a multi-statement
- * transaction and must be run in autocommit mode.
- */
-int
-txn_check_singlestatement(struct txn *txn, const char *where);
-
-/**
  * Returns true if the transaction has a single statement.
  * Supposed to be used from a space on_replace trigger to
  * detect transaction boundaries.
@@ -336,6 +328,13 @@ txn_current_stmt(struct txn *txn)
 	struct stailq_entry *stmt = txn->sub_stmt_begin[txn->in_sub_stmt - 1];
 	stmt = stmt != NULL ? stailq_next(stmt) : stailq_first(&txn->stmts);
 	return stailq_entry(stmt, struct txn_stmt, next);
+}
+
+/** The first statement of the transaction. */
+static inline struct txn_stmt *
+txn_first_stmt(struct txn *txn)
+{
+	return stailq_first_entry(&txn->stmts, struct txn_stmt, next);
 }
 
 /** The last statement of the transaction. */
@@ -455,15 +454,6 @@ box_txn_rollback_to_savepoint(box_txn_savepoint_t *savepoint);
 
 #if defined(__cplusplus)
 } /* extern "C" */
-
-#include "diag.h"
-
-static inline void
-txn_check_singlestatement_xc(struct txn *txn, const char *where)
-{
-	if (txn_check_singlestatement(txn, where) != 0)
-		diag_raise();
-}
 
 #endif /* defined(__cplusplus) */
 

@@ -50,6 +50,39 @@
 #include "gc.h"
 
 /*
+ * Memtx specific transaction data.
+ */
+struct memtx_engine_tx {
+	/* True if there is a ddl operation. */
+	bool is_ddl;
+};
+
+/*
+ * Return true if a space change produces a ddl.
+ */
+static inline bool
+space_is_ddl(int space_id)
+{
+	switch (space_id) {
+	case BOX_SPACE_ID:
+	case BOX_INDEX_ID:
+	case BOX_USER_ID:
+	case BOX_FUNC_ID:
+	case BOX_PRIV_ID:
+	case BOX_SCHEMA_ID:
+	case BOX_CLUSTER_ID:
+	case BOX_SEQUENCE_ID:
+	case BOX_SPACE_SEQUENCE_ID:
+	case BOX_TRIGGER_ID:
+	case BOX_FK_CONSTRAINT_ID:
+	case BOX_TRUNCATE_ID:
+		return true;
+
+	};
+	return false;
+}
+
+/*
  * Memtx yield-in-transaction trigger: roll back the effects
  * of the transaction and mark the transaction as aborted.
  */
@@ -60,9 +93,7 @@ txn_on_yield(struct trigger *trigger, void *event)
 	(void) event;
 
 	struct txn *txn = in_txn();
-	assert(txn && txn->engine_tx);
-	if (txn == NULL || txn->engine_tx == NULL)
-		return;
+	assert(txn != NULL);
 	txn_abort(txn);                 /* doesn't yield or fail */
 }
 
@@ -97,11 +128,7 @@ memtx_init_txn(struct txn *txn)
 	 */
 	trigger_add(&fiber->on_yield, &txn->fiber_on_yield);
 	trigger_add(&fiber->on_stop, &txn->fiber_on_stop);
-	/*
-	 * This serves as a marker that the triggers are
-	 * initialized.
-	 */
-	txn->engine_tx = txn;
+	txn->engine_tx = NULL;
 }
 
 struct memtx_tuple {
@@ -363,8 +390,6 @@ static int
 memtx_engine_prepare(struct engine *engine, struct txn *txn)
 {
 	(void)engine;
-	if (txn->engine_tx == 0)
-		return 0;
 	/*
 	 * These triggers are only used for memtx and only
 	 * when autocommit == false, so we are saving
@@ -390,9 +415,7 @@ memtx_engine_begin(struct engine *engine, struct txn *txn)
 	 * the first thing txn invokes after txn->n_stmts++,
 	 * to match with trigger_clear() in rollbackStatement().
 	 */
-	if (txn->is_autocommit == false) {
-		memtx_init_txn(txn);
-	}
+	memtx_init_txn(txn);
 	return 0;
 }
 
@@ -400,18 +423,55 @@ static int
 memtx_engine_begin_statement(struct engine *engine, struct txn *txn)
 {
 	(void)engine;
-	(void)txn;
 	if (txn->engine_tx == NULL) {
 		struct space *space = txn_last_stmt(txn)->space;
-
-		if (space->def->id > BOX_SYSTEM_ID_MAX &&
-		    ! rlist_empty(&space->on_replace)) {
-			/**
-			 * A space on_replace trigger may initiate
-			 * a yield.
+		/* First statement in current transaction. */
+		txn->engine_tx = region_alloc(&fiber()->gc,
+					      sizeof(struct memtx_engine_tx));
+		if (txn->engine_tx == NULL) {
+			diag_set(OutOfMemory, sizeof(struct memtx_engine_tx),
+				 "region", "struct memtx_engine_tx");
+			return -1;
+		}
+		struct memtx_engine_tx *engine_tx =
+			(struct memtx_engine_tx *)txn->engine_tx;
+		if (space_is_ddl(space->def->id)) {
+			/*
+			 * It is a ddl operation so triggers are going to be
+			 * reset because it is Ok when a ddl operation yields.
 			 */
-			assert(txn->is_autocommit);
-			memtx_init_txn(txn);
+			trigger_clear(&txn->fiber_on_yield);
+			engine_tx->is_ddl = true;
+		} else
+			engine_tx->is_ddl = false;
+	} else {
+		struct space *space = txn_last_stmt(txn)->space;
+		if (space_is_ddl(space->def->id)) {
+			/*
+			 * It is prohibited to continue transaction with
+			 * a ddl operation.
+			 */
+			char where[128];
+			snprintf(where, sizeof(where), "Space %s",
+				 space->def->name);
+			diag_set(ClientError, ER_UNSUPPORTED,
+				 where, "multi-statement transactions");
+			return -1;
+		}
+		struct memtx_engine_tx *engine_tx =
+			(struct memtx_engine_tx *)txn->engine_tx;
+		if (engine_tx->is_ddl) {
+			/*
+			 * It is prohibited to append operation after a ddl
+			 * operation.
+			 */
+			struct space *space = txn_first_stmt(txn)->space;
+			char where[128];
+			snprintf(where, sizeof(where), "Space %s",
+				 space->def->name);
+			diag_set(ClientError, ER_UNSUPPORTED,
+				 where, "multi-statement transactions");
+			return -1;
 		}
 	}
 	return 0;
@@ -462,10 +522,8 @@ memtx_engine_rollback_statement(struct engine *engine, struct txn *txn,
 static void
 memtx_engine_rollback(struct engine *engine, struct txn *txn)
 {
-	if (txn->engine_tx != NULL) {
-		trigger_clear(&txn->fiber_on_yield);
-		trigger_clear(&txn->fiber_on_stop);
-	}
+	trigger_clear(&txn->fiber_on_yield);
+	trigger_clear(&txn->fiber_on_stop);
 	struct txn_stmt *stmt;
 	stailq_reverse(&txn->stmts);
 	stailq_foreach_entry(stmt, &txn->stmts, next)
