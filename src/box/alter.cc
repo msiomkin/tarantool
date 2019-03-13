@@ -1312,6 +1312,7 @@ public:
 	uint32_t iid;
 	virtual void prepare(struct alter_space *alter);
 	virtual void commit(struct alter_space *alter, int64_t signature);
+	virtual void rollback(struct alter_space *alter);
 };
 
 void
@@ -1347,6 +1348,13 @@ TruncateIndex::commit(struct alter_space *alter, int64_t signature)
 
 	index_commit_drop(old_index, signature);
 	index_commit_create(new_index, signature);
+}
+
+void
+TruncateIndex::rollback(struct alter_space *alter)
+{
+	struct index *new_index = space_index(alter->new_space, iid);
+	index_abort_create(new_index);
 }
 
 /**

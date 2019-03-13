@@ -759,6 +759,10 @@ i3:select()
 
 -- Check that recovery works.
 inspector:cmd("restart server default")
+test_run = require('test_run')
+inspector = test_run.new()
+engine = inspector:get_cfg('engine')
+errinj = box.error.injection
 
 s = box.space.test
 s.index.i1:select()
@@ -774,4 +778,11 @@ s.index.i1:select()
 
 box.snapshot()
 
+s:drop()
+
+s = box.schema.space.create('truncate_rollback', {engine = engine})
+_ = s:create_index('pk')
+errinj.set('ERRINJ_WAL_IO', true)
+s:truncate()
+errinj.set('ERRINJ_WAL_IO', false)
 s:drop()
