@@ -2619,30 +2619,35 @@ coll_id_def_new_from_tuple(const struct tuple *tuple, struct coll_id_def *def)
 }
 
 /**
- * Rollback a change in collation space.
- * A change is only INSERT or DELETE, UPDATE is not supported.
+ * Rollback a delete in collation space.
  */
 static void
-coll_id_cache_rollback(struct trigger *trigger, void *event)
+coll_id_cache_rollback_delete(struct trigger *trigger, void *event)
 {
+	(void) event;
 	struct coll_id *coll_id = (struct coll_id *) trigger->data;
-	struct txn_stmt *stmt = txn_last_stmt((struct txn*) event);
 
-	if (stmt->new_tuple == NULL) {
-		/* DELETE: put the collation identifier back. */
-		assert(stmt->old_tuple != NULL);
-		struct coll_id *replaced_id;
-		if (coll_id_cache_replace(coll_id, &replaced_id) != 0) {
-			panic("Out of memory on insertion into collation "\
-			      "cache");
-		}
-		assert(replaced_id == NULL);
-	} else {
-		/* INSERT: delete the new collation identifier. */
-		assert(stmt->old_tuple == NULL);
-		coll_id_cache_delete(coll_id);
-		coll_id_delete(coll_id);
+	/* DELETE: put the collation identifier back. */
+	struct coll_id *replaced_id;
+	if (coll_id_cache_replace(coll_id, &replaced_id) != 0) {
+		panic("Out of memory on insertion into collation "\
+		      "cache");
 	}
+	assert(replaced_id == NULL);
+}
+
+/**
+ * Rollback an insert in collation space.
+ */
+static void
+coll_id_cache_rollback_insert(struct trigger *trigger, void *event)
+{
+	(void) event;
+	struct coll_id *coll_id = (struct coll_id *) trigger->data;
+
+	/* INSERT: delete the new collation identifier. */
+	coll_id_cache_delete(coll_id);
+	coll_id_delete(coll_id);
 }
 
 
@@ -2667,8 +2672,6 @@ on_replace_dd_collation(struct trigger * /* trigger */, void *event)
 	struct tuple *old_tuple = stmt->old_tuple;
 	struct tuple *new_tuple = stmt->new_tuple;
 	txn_check_singlestatement_xc(txn, "Space _collation");
-	struct trigger *on_rollback =
-		txn_alter_trigger_new(coll_id_cache_rollback, NULL);
 	struct trigger *on_commit =
 		txn_alter_trigger_new(coll_id_cache_commit, NULL);
 	if (new_tuple == NULL && old_tuple != NULL) {
@@ -2700,10 +2703,12 @@ on_replace_dd_collation(struct trigger * /* trigger */, void *event)
 		 * simple.
 		 */
 		coll_id_cache_delete(old_coll_id);
-		on_rollback->data = old_coll_id;
 		on_commit->data = old_coll_id;
-		txn_on_rollback(txn, on_rollback);
 		txn_on_commit(txn, on_commit);
+		struct trigger *on_rollback =
+			txn_alter_trigger_new(coll_id_cache_rollback_delete,
+					      old_coll_id);
+		txn_on_rollback(txn, on_rollback);
 	} else if (new_tuple != NULL && old_tuple == NULL) {
 		/* INSERT */
 		struct coll_id_def new_def;
@@ -2719,7 +2724,9 @@ on_replace_dd_collation(struct trigger * /* trigger */, void *event)
 			diag_raise();
 		}
 		assert(replaced_id == NULL);
-		on_rollback->data = new_coll_id;
+		struct trigger *on_rollback =
+			txn_alter_trigger_new(coll_id_cache_rollback_insert,
+					      new_coll_id);
 		txn_on_rollback(txn, on_rollback);
 	} else {
 		/* UPDATE */
