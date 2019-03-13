@@ -30,6 +30,7 @@
  */
 #include "swim_test_utils.h"
 #include "swim_test_ev.h"
+#include "swim_test_transport.h"
 #include "swim/swim.h"
 #include "swim/swim_ev.h"
 #include "uuid/tt_uuid.h"
@@ -94,9 +95,15 @@ swim_cluster_node(struct swim_cluster *cluster, int i)
 }
 
 void
-swim_cluster_block_io(struct swim_cluster *cluster, int i, double delay)
+swim_cluster_block_io(struct swim_cluster *cluster, int i)
 {
-	swim_test_ev_block_fd(swim_fd(cluster->node[i]), delay);
+	swim_test_transport_block_fd(swim_fd(cluster->node[i]));
+}
+
+void
+swim_cluster_unblock_io(struct swim_cluster *cluster, int i)
+{
+	swim_test_transport_unblock_fd(swim_fd(cluster->node[i]));
 }
 
 /** Check if @a s1 knows every member of @a s2's table. */
@@ -151,6 +158,12 @@ int
 swim_cluster_wait_fullmesh(struct swim_cluster *cluster, double timeout)
 {
 	return swim_wait_timeout(timeout, swim_cluster_is_fullmesh(cluster));
+}
+
+void
+swim_run_for(double duration)
+{
+	swim_wait_timeout(duration, false);
 }
 
 bool
