@@ -129,16 +129,28 @@ swim_cluster_is_fullmesh(struct swim_cluster *cluster)
 	return true;
 }
 
+/**
+ * A common wrapper for some conditions checking after each event
+ * loop step.
+ */
+#define swim_wait_timeout(timeout, target_cond) ({			\
+	swim_ev_set_brk(timeout);					\
+	double deadline = swim_time() + timeout;			\
+	int rc = 0;							\
+	while (! (target_cond)) {					\
+		if (swim_time() >= deadline) {				\
+			rc = -1;					\
+			break;						\
+		}							\
+		swim_do_loop_step(loop());				\
+	}								\
+	rc;								\
+})
+
 int
 swim_cluster_wait_fullmesh(struct swim_cluster *cluster, double timeout)
 {
-	double deadline = swim_time() + timeout;
-	while (! swim_cluster_is_fullmesh(cluster)) {
-		if (swim_time() >= deadline)
-			return -1;
-		swim_do_loop_step(loop());
-	}
-	return 0;
+	return swim_wait_timeout(timeout, swim_cluster_is_fullmesh(cluster));
 }
 
 bool

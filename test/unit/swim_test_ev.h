@@ -51,6 +51,14 @@ swim_test_ev_free(void);
 void
 swim_test_ev_block_fd(int fd, double delay);
 
+/**
+ * Stop the event loop after @a delay fake seconds. It does not
+ * affect other events, so the loop can stop earlier multiple
+ * times.
+ */
+void
+swim_ev_set_brk(double delay);
+
 /** Play one step of event loop, process generated events. */
 void
 swim_do_loop_step(struct ev_loop *loop);
