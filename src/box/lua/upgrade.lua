@@ -636,6 +636,15 @@ local function upgrade_to_2_1_2()
     log.info("create index primary on _sql_stat")
     _index:insert{box.schema.SQL_STAT_ID, 0, 'primary', 'tree',
                   {unique = true}, {{0, 'unsigned'}, {1, 'unsigned'}}}
+
+    _space:run_triggers(false)
+    _index:run_triggers(false)
+    _index:delete({box.schema.SQL_STAT1_ID, 0})
+    _space:delete({box.schema.SQL_STAT1_ID})
+    _index:delete({box.schema.SQL_STAT4_ID, 0})
+    _space:delete({box.schema.SQL_STAT4_ID})
+    _space:run_triggers(true)
+    _index:run_triggers(true)
 end
 
 local function get_version()
