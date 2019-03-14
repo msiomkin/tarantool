@@ -150,9 +150,9 @@ test_run:cmd("switch replica")
 replication = box.cfg.replication
 box.cfg{replication = {}}
 box.cfg{replication = replication}
-test_run:wait_cond(function() return box.info.status ~= 'orphan' end, 50)
+test_run:wait_cond(function() return box.info.status ~= 'orphan' end, 200)
 box.info.ro -- false
-test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end, 50)
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end, 200)
 test_run:wait_log("replica", "ER_CFG.*", nil, 200)
 
 test_run:cmd("switch default")

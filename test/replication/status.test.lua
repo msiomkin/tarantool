@@ -83,7 +83,7 @@ box.info.vclock[master_id] == 2
 master = box.info.replication[master_id]
 master.id == master_id
 master.uuid == box.space._cluster:get(master_id)[2]
-test_run:wait_cond(function() return master.upstream.status == 'follow' end, 50)
+test_run:wait_cond(function() return master.upstream.status == 'follow' end, 200)
 master.upstream.lag < 1
 master.upstream.idle < 1
 master.upstream.peer:match("unix/")

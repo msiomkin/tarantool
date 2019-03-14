@@ -158,7 +158,7 @@ function test_timeout()
     local replicaB = box.info.replication[3].upstream or box.info.replication[2].upstream
     local follows = test_run:wait_cond(function()
         return replicaA.status == 'follow' or replicaB.status == 'follow'
-    end, 1)
+    end, 20)
     if not follows then error('replicas not in follow status') end
     for i = 0, 99 do 
         box.space.test_timeout:replace({1})

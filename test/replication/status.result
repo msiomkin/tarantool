@@ -222,7 +222,7 @@ master.uuid == box.space._cluster:get(master_id)[2]
 ---
 - true
 ...
-test_run:wait_cond(function() return master.upstream.status == 'follow' end, 50)
+test_run:wait_cond(function() return master.upstream.status == 'follow' end, 200)
 ---
 - true
 ...
